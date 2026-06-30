@@ -85,7 +85,10 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             return;
         }
 
-        getCommand("coins").setExecutor(new CoinCommand(coinManager));
+        CoinCommand coinCommand = new CoinCommand(coinManager);
+
+        getCommand("coins").setExecutor(coinCommand);
+        getCommand("coins").setTabCompleter(coinCommand);
     }
 
     private void savePlayerDataOnShutdown() {
