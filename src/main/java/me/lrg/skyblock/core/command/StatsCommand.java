@@ -157,6 +157,8 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        statsManager.applyStatsToPlayer(target);
+
         sender.sendMessage("§a" + target.getName() + " の " + statName + " を " + format(value) + " に設定しました。");
         showStats(sender, target);
     }

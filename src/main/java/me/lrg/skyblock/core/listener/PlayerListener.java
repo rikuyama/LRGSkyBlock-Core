@@ -2,6 +2,7 @@ package me.lrg.skyblock.core.listener;
 
 import me.lrg.skyblock.core.manager.PlayerManager;
 import me.lrg.skyblock.core.manager.StatsManager;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -35,10 +36,10 @@ public class PlayerListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
+        Player player = event.getPlayer();
 
-        playerManager.loadPlayer(event.getPlayer());
-        statsManager.loadStats(uuid);
+        playerManager.loadPlayer(player);
+        statsManager.loadStats(player);
     }
 
     @EventHandler
