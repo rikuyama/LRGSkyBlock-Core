@@ -1,12 +1,15 @@
 package me.lrg.skyblock.core;
 
-import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.command.CoinCommand;
+import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
 import me.lrg.skyblock.core.listener.PlayerListener;
 import me.lrg.skyblock.core.manager.CoinManager;
 import me.lrg.skyblock.core.manager.PlayerManager;
+import me.lrg.skyblock.core.manager.StatsManager;
 import me.lrg.skyblock.core.repository.PlayerRepository;
+import me.lrg.skyblock.core.repository.StatsRepository;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.logging.Level;
@@ -17,9 +20,14 @@ import java.util.logging.Level;
 public final class LRGSkyBlockCore extends JavaPlugin {
 
     private DatabaseManager databaseManager;
+
     private PlayerRepository playerRepository;
+    private StatsRepository statsRepository;
+
     private PlayerManager playerManager;
     private CoinManager coinManager;
+    private StatsManager statsManager;
+
     private PlayerDefaultSettings playerDefaultSettings;
 
     @Override
@@ -44,7 +52,11 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     @Override
     public void onDisable() {
         savePlayerDataOnShutdown();
+        saveStatsDataOnShutdown();
+
         clearPlayerCache();
+        clearStatsCache();
+
         closeDatabase();
 
         getLogger().info("LRG SkyBlock Core を停止しました。");
@@ -60,6 +72,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
     private void setupRepositories() {
         this.playerRepository = new PlayerRepository(databaseManager, getLogger());
+        this.statsRepository = new StatsRepository(databaseManager, getLogger());
     }
 
     private void setupManagers() {
@@ -70,25 +83,28 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         );
 
         this.coinManager = new CoinManager(playerManager);
+        this.statsManager = new StatsManager(this, statsRepository);
     }
 
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(
-                new PlayerListener(playerManager),
+                new PlayerListener(playerManager, statsManager),
                 this
         );
     }
 
     private void registerCommands() {
-        if (getCommand("coins") == null) {
+        PluginCommand coinsCommand = getCommand("coins");
+
+        if (coinsCommand == null) {
             getLogger().warning("plugin.yml に coins コマンドが登録されていません。");
             return;
         }
 
         CoinCommand coinCommand = new CoinCommand(coinManager);
 
-        getCommand("coins").setExecutor(coinCommand);
-        getCommand("coins").setTabCompleter(coinCommand);
+        coinsCommand.setExecutor(coinCommand);
+        coinsCommand.setTabCompleter(coinCommand);
     }
 
     private void savePlayerDataOnShutdown() {
@@ -99,12 +115,28 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         playerManager.saveAllSynchronously();
     }
 
+    private void saveStatsDataOnShutdown() {
+        if (statsManager == null) {
+            return;
+        }
+
+        statsManager.saveAllSynchronously();
+    }
+
     private void clearPlayerCache() {
         if (playerManager == null) {
             return;
         }
 
         playerManager.clear();
+    }
+
+    private void clearStatsCache() {
+        if (statsManager == null) {
+            return;
+        }
+
+        statsManager.clear();
     }
 
     private void closeDatabase() {
@@ -123,11 +155,19 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         return playerRepository;
     }
 
+    public StatsRepository getStatsRepository() {
+        return statsRepository;
+    }
+
     public PlayerManager getPlayerManager() {
         return playerManager;
     }
 
     public CoinManager getCoinManager() {
         return coinManager;
+    }
+
+    public StatsManager getStatsManager() {
+        return statsManager;
     }
 }
