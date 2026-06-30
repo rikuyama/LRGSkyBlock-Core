@@ -6,6 +6,10 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.command.TabCompleter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -26,7 +30,7 @@ import java.util.UUID;
  * - Coins操作はCoinManagerへ任せる
  * - 現段階ではオンラインプレイヤーのみ対象
  */
-public class CoinCommand implements CommandExecutor {
+public class CoinCommand implements CommandExecutor, TabCompleter {
 
     private static final String PERMISSION_USE = "lrgskyblock.command.coins";
     private static final String PERMISSION_ADMIN = "lrgskyblock.command.coins.admin";
@@ -218,5 +222,86 @@ public class CoinCommand implements CommandExecutor {
     }
 
     private record CommandInput(Player target, long amount) {
+    }
+    @Override
+    public List<String> onTabComplete(
+            CommandSender sender,
+            Command command,
+            String alias,
+            String[] args
+    ) {
+        if (!sender.hasPermission(PERMISSION_USE)) {
+            return Collections.emptyList();
+        }
+
+        if (args.length == 1) {
+            List<String> completions = new ArrayList<>();
+
+            completions.add("help");
+
+            if (sender.hasPermission(PERMISSION_ADMIN)) {
+                completions.add("add");
+                completions.add("remove");
+                completions.add("set");
+            }
+
+            return filterStartsWith(completions, args[0]);
+        }
+
+        if (args.length == 2) {
+            if (!sender.hasPermission(PERMISSION_ADMIN)) {
+                return Collections.emptyList();
+            }
+
+            if (!isAdminSubCommand(args[0])) {
+                return Collections.emptyList();
+            }
+
+            List<String> playerNames = Bukkit.getOnlinePlayers()
+                    .stream()
+                    .map(Player::getName)
+                    .toList();
+
+            return filterStartsWith(playerNames, args[1]);
+        }
+
+        if (args.length == 3) {
+            if (!sender.hasPermission(PERMISSION_ADMIN)) {
+                return Collections.emptyList();
+            }
+
+            if (!isAdminSubCommand(args[0])) {
+                return Collections.emptyList();
+            }
+
+            List<String> amounts = List.of(
+                    "1",
+                    "10",
+                    "100",
+                    "1000",
+                    "10000",
+                    "100000"
+            );
+
+            return filterStartsWith(amounts, args[2]);
+        }
+
+        return Collections.emptyList();
+    }
+
+    private boolean isAdminSubCommand(String text) {
+        String lowerText = text.toLowerCase();
+
+        return lowerText.equals("add")
+                || lowerText.equals("remove")
+                || lowerText.equals("set");
+    }
+
+    private List<String> filterStartsWith(List<String> values, String input) {
+        String lowerInput = input.toLowerCase();
+
+        return values.stream()
+                .filter(value -> value.toLowerCase().startsWith(lowerInput))
+                .toList();
     }
 }
