@@ -10,7 +10,7 @@
 
     <groupId>me.LRG</groupId>
     <artifactId>LRGSkyBlock-Core</artifactId>
-    <version>1.0.0</version>
+    <version>0.3.0</version>
 
 
     <properties>
@@ -125,85 +125,34 @@
 
 
     <build>
-
-
         <plugins>
-
-
-            <!-- Java 21 -->
-
             <plugin>
-
                 <groupId>org.apache.maven.plugins</groupId>
-
                 <artifactId>maven-compiler-plugin</artifactId>
-
                 <version>3.13.0</version>
-
-
                 <configuration>
-
-                    <release>21</release>
-
+                    <source>21</source>
+                    <target>21</target>
                 </configuration>
-
-
             </plugin>
-
-
-
-            <!-- 依存をjarにまとめる -->
 
             <plugin>
-
                 <groupId>org.apache.maven.plugins</groupId>
-
                 <artifactId>maven-shade-plugin</artifactId>
-
                 <version>3.6.0</version>
-
-
                 <executions>
-
-
                     <execution>
-
-
                         <phase>package</phase>
-
-
                         <goals>
-
                             <goal>shade</goal>
-
                         </goals>
-
-
                         <configuration>
-
-
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-
-
-                            <shadedArtifactAttached>false</shadedArtifactAttached>
-
-
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>shaded</shadedClassifierName>
                         </configuration>
-
-
                     </execution>
-
-
                 </executions>
-
-
             </plugin>
-
-
         </plugins>
-
-
     </build>
-
-
 </project>

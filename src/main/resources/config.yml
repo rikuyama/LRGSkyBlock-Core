@@ -4,8 +4,14 @@ database:
 
   port: 3306
 
-  database: LRGSkyBlock
+  database: lrgskyblock
 
   username: root
 
   password: peka2305
+
+  player:
+    default-coins: 0
+
+  messages:
+    data-load-failed-kick: "&cプレイヤーデータの読み込みに失敗しました。&7時間をおいてもう一度参加してください。"
