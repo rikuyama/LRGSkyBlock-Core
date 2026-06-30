@@ -1,6 +1,7 @@
 package me.lrg.skyblock.core;
 
 import me.lrg.skyblock.core.command.CoinCommand;
+import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
 import me.lrg.skyblock.core.listener.PlayerListener;
@@ -98,13 +99,23 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
         if (coinsCommand == null) {
             getLogger().warning("plugin.yml に coins コマンドが登録されていません。");
-            return;
+        } else {
+            CoinCommand coinCommand = new CoinCommand(coinManager);
+
+            coinsCommand.setExecutor(coinCommand);
+            coinsCommand.setTabCompleter(coinCommand);
         }
 
-        CoinCommand coinCommand = new CoinCommand(coinManager);
+        PluginCommand statsCommand = getCommand("stats");
 
-        coinsCommand.setExecutor(coinCommand);
-        coinsCommand.setTabCompleter(coinCommand);
+        if (statsCommand == null) {
+            getLogger().warning("plugin.yml に stats コマンドが登録されていません。");
+        } else {
+            StatsCommand statsCommandExecutor = new StatsCommand(statsManager);
+
+            statsCommand.setExecutor(statsCommandExecutor);
+            statsCommand.setTabCompleter(statsCommandExecutor);
+        }
     }
 
     private void savePlayerDataOnShutdown() {

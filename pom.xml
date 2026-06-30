@@ -10,7 +10,7 @@
 
     <groupId>me.LRG</groupId>
     <artifactId>LRGSkyBlock-Core</artifactId>
-    <version>0.4.0</version>
+    <version>0.4.1</version>
 
 
     <properties>
