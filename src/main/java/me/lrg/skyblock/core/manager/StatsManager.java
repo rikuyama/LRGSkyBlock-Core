@@ -9,6 +9,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Collection;
 import java.util.List;
@@ -25,10 +26,10 @@ import java.util.logging.Logger;
  *
  * このクラスの役割:
  * - 参加時にStatsDataを読み込む
- * - 初期StatsDataを作成する
  * - StatsDataをメモリに保存する
- * - StatsをMinecraft本体へ反映する
- * - 退出時や停止時にStatsDataを保存する
+ * - Health / Speed をMinecraft本体へ反映する
+ * - Health / Mana をActionBarへ常時表示する
+ * - Strengthを攻撃ダメージ計算に使う
  *
  * 注意:
  * - SQLは書かない
@@ -47,6 +48,14 @@ public class StatsManager {
     private static final double MAX_HEALTH = 10000.0;
 
     /**
+     * Minecraft GUI上のハート表示上限。
+     *
+     * 40HP = 20ハート = 最大2段くらい。
+     * Stats上のHealthが200や500でも、GUIのハートは40HPまでに制限する。
+     */
+    private static final double MAX_VISUAL_HEALTH = 40.0;
+
+    /**
      * Minecraftの通常移動速度はだいたい0.1。
      * LRG SkyBlock側のspeed=100を0.1に変換する。
      */
@@ -55,11 +64,19 @@ public class StatsManager {
     private static final double MIN_MOVEMENT_SPEED = 0.0;
     private static final double MAX_MOVEMENT_SPEED = 1.0;
 
+    /**
+     * ActionBar更新間隔。
+     * 20 ticks = 1秒。
+     */
+    private static final long ACTION_BAR_INTERVAL_TICKS = 20L;
+
     private final JavaPlugin plugin;
     private final StatsRepository statsRepository;
     private final Logger logger;
 
     private final ConcurrentMap<UUID, StatsData> statsDataMap = new ConcurrentHashMap<>();
+
+    private BukkitTask actionBarTask;
 
     public StatsManager(JavaPlugin plugin, StatsRepository statsRepository) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -69,7 +86,6 @@ public class StatsManager {
 
     /**
      * プレイヤー参加時に呼ぶ。
-     * DB処理は非同期で実行し、Minecraft本体への反映はメインスレッドで行う。
      *
      * @param player 参加したプレイヤー
      */
@@ -83,7 +99,6 @@ public class StatsManager {
 
     /**
      * プレイヤー退出時に呼ぶ。
-     * キャッシュから削除してから非同期保存する。
      *
      * @param uuid プレイヤーUUID
      */
@@ -127,7 +142,39 @@ public class StatsManager {
     }
 
     /**
-     * キャッシュ済みStatsDataをMinecraft本体へ反映する。
+     * ActionBar常時表示タスクを開始する。
+     */
+    public void startActionBarTask() {
+        if (actionBarTask != null && !actionBarTask.isCancelled()) {
+            return;
+        }
+
+        this.actionBarTask = Bukkit.getScheduler().runTaskTimer(
+                plugin,
+                this::sendActionBarToOnlinePlayers,
+                ACTION_BAR_INTERVAL_TICKS,
+                ACTION_BAR_INTERVAL_TICKS
+        );
+
+        logger.info("[LRG] Stats ActionBar task started.");
+    }
+
+    /**
+     * ActionBar常時表示タスクを停止する。
+     */
+    public void stopActionBarTask() {
+        if (actionBarTask == null) {
+            return;
+        }
+
+        actionBarTask.cancel();
+        actionBarTask = null;
+
+        logger.info("[LRG] Stats ActionBar task stopped.");
+    }
+
+    /**
+     * StatsDataをMinecraft本体へ反映する。
      *
      * @param player 反映対象プレイヤー
      * @return 反映成功ならtrue
@@ -145,9 +192,36 @@ public class StatsManager {
 
         applyHealth(player, statsData);
         applySpeed(player, statsData);
-        sendManaActionBar(player, statsData);
+        sendHealthManaActionBar(player, statsData);
 
         return true;
+    }
+
+    /**
+     * Strengthを使って攻撃ダメージを計算する。
+     *
+     * 仮仕様:
+     * finalDamage = baseDamage * (1 + strength / 100)
+     *
+     * @param attacker 攻撃者
+     * @param baseDamage 元ダメージ
+     * @return Strength反映後のダメージ
+     */
+    public double calculateStrengthDamage(Player attacker, double baseDamage) {
+        Objects.requireNonNull(attacker, "attacker");
+
+        Optional<StatsData> statsDataOptional = getStatsData(attacker.getUniqueId());
+
+        if (statsDataOptional.isEmpty()) {
+            return baseDamage;
+        }
+
+        StatsData statsData = statsDataOptional.get();
+
+        double strength = Math.max(0.0, statsData.getStrength());
+        double multiplier = 1.0 + (strength / 100.0);
+
+        return baseDamage * multiplier;
     }
 
     private void loadStatsAsync(UUID uuid) {
@@ -204,6 +278,12 @@ public class StatsManager {
         );
     }
 
+    /**
+     * HealthをMinecraft本体へ反映する。
+     *
+     * Stats上のHealthは100, 200, 500など大きくできる。
+     * ただしGUIのハートが増えすぎないよう、Minecraft上の最大体力は最大40HPまでに制限する。
+     */
     private void applyHealth(Player player, StatsData statsData) {
         AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
 
@@ -212,12 +292,13 @@ public class StatsManager {
             return;
         }
 
-        double maxHealth = clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH);
+        double statsMaxHealth = clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH);
+        double visualMaxHealth = Math.min(statsMaxHealth, MAX_VISUAL_HEALTH);
 
-        maxHealthAttribute.setBaseValue(maxHealth);
+        maxHealthAttribute.setBaseValue(visualMaxHealth);
 
-        if (player.getHealth() > maxHealth) {
-            player.setHealth(maxHealth);
+        if (player.getHealth() > visualMaxHealth) {
+            player.setHealth(visualMaxHealth);
         }
     }
 
@@ -235,10 +316,38 @@ public class StatsManager {
         movementSpeedAttribute.setBaseValue(clampedMovementSpeed);
     }
 
-    private void sendManaActionBar(Player player, StatsData statsData) {
-        String text = "§c❤ " + format(statsData.getHealth())
-                + " §b✎ Mana " + format(statsData.getMana())
-                + " §f✦ Speed " + format(statsData.getSpeed());
+    private void sendActionBarToOnlinePlayers() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Optional<StatsData> statsDataOptional = getStatsData(player.getUniqueId());
+
+            if (statsDataOptional.isEmpty()) {
+                continue;
+            }
+
+            sendHealthManaActionBar(player, statsDataOptional.get());
+        }
+    }
+
+    /**
+     * Health / Mana をActionBarに表示する。
+     *
+     * 表示は小数点なし。
+     * Minecraft上の実HPは最大40までだが、表示上はStatsのHealthにスケールする。
+     *
+     * 例:
+     * Stats Health = 200
+     * Minecraft実HP = 40 / 40
+     * 表示 = 200 / 200
+     */
+    private void sendHealthManaActionBar(Player player, StatsData statsData) {
+        double statsMaxHealth = clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH);
+        double visualMaxHealth = Math.min(statsMaxHealth, MAX_VISUAL_HEALTH);
+
+        double healthRate = player.getHealth() / visualMaxHealth;
+        double displayCurrentHealth = statsMaxHealth * healthRate;
+
+        String text = "§c❤ " + formatInteger(displayCurrentHealth) + " / " + formatInteger(statsMaxHealth)
+                + "   §b✎ Mana " + formatInteger(statsData.getMana());
 
         player.sendActionBar(Component.text(text));
     }
@@ -247,11 +356,7 @@ public class StatsManager {
         return Math.max(min, Math.min(value, max));
     }
 
-    private String format(double value) {
-        if (value == Math.floor(value)) {
-            return String.valueOf((long) value);
-        }
-
-        return String.format("%.2f", value);
+    private String formatInteger(double value) {
+        return String.valueOf(Math.round(value));
     }
 }

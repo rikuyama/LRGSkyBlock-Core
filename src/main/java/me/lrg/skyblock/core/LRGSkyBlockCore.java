@@ -4,6 +4,7 @@ import me.lrg.skyblock.core.command.CoinCommand;
 import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
+import me.lrg.skyblock.core.listener.PlayerCombatListener;
 import me.lrg.skyblock.core.listener.PlayerListener;
 import me.lrg.skyblock.core.manager.CoinManager;
 import me.lrg.skyblock.core.manager.PlayerManager;
@@ -42,6 +43,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             setupManagers();
             registerListeners();
             registerCommands();
+            startTasks();
 
             getLogger().info("LRG SkyBlock Core を起動しました。");
         } catch (Exception exception) {
@@ -52,6 +54,8 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        stopTasks();
+
         savePlayerDataOnShutdown();
         saveStatsDataOnShutdown();
 
@@ -92,6 +96,11 @@ public final class LRGSkyBlockCore extends JavaPlugin {
                 new PlayerListener(playerManager, statsManager),
                 this
         );
+
+        getServer().getPluginManager().registerEvents(
+                new PlayerCombatListener(statsManager),
+                this
+        );
     }
 
     private void registerCommands() {
@@ -116,6 +125,22 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             statsCommand.setExecutor(statsCommandExecutor);
             statsCommand.setTabCompleter(statsCommandExecutor);
         }
+    }
+
+    private void startTasks() {
+        if (statsManager == null) {
+            return;
+        }
+
+        statsManager.startActionBarTask();
+    }
+
+    private void stopTasks() {
+        if (statsManager == null) {
+            return;
+        }
+
+        statsManager.stopActionBarTask();
     }
 
     private void savePlayerDataOnShutdown() {
