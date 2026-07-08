@@ -4,9 +4,11 @@ import me.lrg.skyblock.core.command.CoinCommand;
 import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
+import me.lrg.skyblock.core.listener.FarmingFortuneListener;
 import me.lrg.skyblock.core.listener.PlayerCombatListener;
 import me.lrg.skyblock.core.listener.PlayerListener;
 import me.lrg.skyblock.core.manager.CoinManager;
+import me.lrg.skyblock.core.manager.FortuneManager;
 import me.lrg.skyblock.core.manager.PlayerManager;
 import me.lrg.skyblock.core.manager.StatsManager;
 import me.lrg.skyblock.core.repository.PlayerRepository;
@@ -29,6 +31,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private PlayerManager playerManager;
     private CoinManager coinManager;
     private StatsManager statsManager;
+    private FortuneManager fortuneManager;
 
     private PlayerDefaultSettings playerDefaultSettings;
 
@@ -89,6 +92,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
         this.coinManager = new CoinManager(playerManager);
         this.statsManager = new StatsManager(this, statsRepository);
+        this.fortuneManager = new FortuneManager(statsManager);
     }
 
     private void registerListeners() {
@@ -99,6 +103,11 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(
                 new PlayerCombatListener(statsManager),
+                this
+        );
+
+        getServer().getPluginManager().registerEvents(
+                new FarmingFortuneListener(fortuneManager),
                 this
         );
     }
@@ -205,5 +214,9 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
     public StatsManager getStatsManager() {
         return statsManager;
+    }
+
+    public FortuneManager getFortuneManager() {
+        return fortuneManager;
     }
 }

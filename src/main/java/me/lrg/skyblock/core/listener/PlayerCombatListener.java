@@ -12,7 +12,8 @@ import java.util.Objects;
  * プレイヤーの戦闘処理を扱うListener。
  *
  * このクラスの役割:
- * - プレイヤーの攻撃時にStrengthをダメージへ反映する
+ * - 攻撃者のStrength / Critical Chance / Crit Damageをダメージへ反映する
+ * - 防御者のDefenseを被ダメージ軽減へ反映する
  *
  * 注意:
  * - SQLは書かない
@@ -28,13 +29,16 @@ public class PlayerCombatListener implements Listener {
 
     @EventHandler
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        if (!(event.getDamager() instanceof Player attacker)) {
-            return;
+        double damage = event.getDamage();
+
+        if (event.getDamager() instanceof Player attacker) {
+            damage = statsManager.calculateAttackDamage(attacker, damage);
         }
 
-        double baseDamage = event.getDamage();
-        double finalDamage = statsManager.calculateStrengthDamage(attacker, baseDamage);
+        if (event.getEntity() instanceof Player defender) {
+            damage = statsManager.calculateDefenseDamage(defender, damage);
+        }
 
-        event.setDamage(finalDamage);
+        event.setDamage(damage);
     }
 }

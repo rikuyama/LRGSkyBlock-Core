@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.4.4
+version: 0.4.13
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "1.20"
 
@@ -16,7 +16,7 @@ commands:
       - coin
 
   stats:
-    description: Statsを確認・操作するコマンド
+    description: ステータスを確認・操作するコマンド
     usage: /stats
     aliases:
       - stat
@@ -31,9 +31,9 @@ permissions:
     default: op
 
   lrgskyblock.command.stats:
-    description: Stats確認コマンドの使用権限
+    description: ステータス確認コマンドの使用権限
     default: true
 
   lrgskyblock.command.stats.admin:
-    description: Stats管理コマンドの使用権限
+    description: ステータス管理コマンドの使用権限
     default: op

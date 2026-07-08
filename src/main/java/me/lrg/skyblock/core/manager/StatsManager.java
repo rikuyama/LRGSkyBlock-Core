@@ -1,6 +1,7 @@
 package me.lrg.skyblock.core.manager;
 
 import me.lrg.skyblock.core.model.StatsData;
+import me.lrg.skyblock.core.model.StatsType;
 import me.lrg.skyblock.core.repository.RepositoryException;
 import me.lrg.skyblock.core.repository.StatsRepository;
 import net.kyori.adventure.text.Component;
@@ -18,18 +19,12 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * オンライン中プレイヤーのStatsDataを管理するManager。
- *
- * このクラスの役割:
- * - 参加時にStatsDataを読み込む
- * - StatsDataをメモリに保存する
- * - Health / Speed をMinecraft本体へ反映する
- * - Health / Mana をActionBarへ常時表示する
- * - Strengthを攻撃ダメージ計算に使う
  *
  * 注意:
  * - SQLは書かない
@@ -43,31 +38,18 @@ public class StatsManager {
     private static final double DEFAULT_STRENGTH = 0.0;
     private static final double DEFAULT_DEFENSE = 0.0;
     private static final double DEFAULT_SPEED = 100.0;
+    private static final double DEFAULT_CRITICAL_CHANCE = 30.0;
+    private static final double DEFAULT_MAGIC_FIND = 0.0;
 
     private static final double MIN_HEALTH = 1.0;
     private static final double MAX_HEALTH = 10000.0;
-
-    /**
-     * Minecraft GUI上のハート表示上限。
-     *
-     * 40HP = 20ハート = 最大2段くらい。
-     * Stats上のHealthが200や500でも、GUIのハートは40HPまでに制限する。
-     */
     private static final double MAX_VISUAL_HEALTH = 40.0;
 
-    /**
-     * Minecraftの通常移動速度はだいたい0.1。
-     * LRG SkyBlock側のspeed=100を0.1に変換する。
-     */
     private static final double SPEED_TO_MOVEMENT_SPEED_RATE = 0.001;
 
     private static final double MIN_MOVEMENT_SPEED = 0.0;
     private static final double MAX_MOVEMENT_SPEED = 1.0;
 
-    /**
-     * ActionBar更新間隔。
-     * 20 ticks = 1秒。
-     */
     private static final long ACTION_BAR_INTERVAL_TICKS = 20L;
 
     private final JavaPlugin plugin;
@@ -84,11 +66,6 @@ public class StatsManager {
         this.logger = plugin.getLogger();
     }
 
-    /**
-     * プレイヤー参加時に呼ぶ。
-     *
-     * @param player 参加したプレイヤー
-     */
     public void loadStats(Player player) {
         Objects.requireNonNull(player, "player");
 
@@ -97,11 +74,6 @@ public class StatsManager {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> loadStatsAsync(uuid));
     }
 
-    /**
-     * プレイヤー退出時に呼ぶ。
-     *
-     * @param uuid プレイヤーUUID
-     */
     public void saveAndRemoveStats(UUID uuid) {
         Objects.requireNonNull(uuid, "uuid");
 
@@ -141,9 +113,6 @@ public class StatsManager {
         statsDataMap.clear();
     }
 
-    /**
-     * ActionBar常時表示タスクを開始する。
-     */
     public void startActionBarTask() {
         if (actionBarTask != null && !actionBarTask.isCancelled()) {
             return;
@@ -159,9 +128,6 @@ public class StatsManager {
         logger.info("[LRG] Stats ActionBar task started.");
     }
 
-    /**
-     * ActionBar常時表示タスクを停止する。
-     */
     public void stopActionBarTask() {
         if (actionBarTask == null) {
             return;
@@ -173,12 +139,6 @@ public class StatsManager {
         logger.info("[LRG] Stats ActionBar task stopped.");
     }
 
-    /**
-     * StatsDataをMinecraft本体へ反映する。
-     *
-     * @param player 反映対象プレイヤー
-     * @return 反映成功ならtrue
-     */
     public boolean applyStatsToPlayer(Player player) {
         Objects.requireNonNull(player, "player");
 
@@ -198,16 +158,14 @@ public class StatsManager {
     }
 
     /**
-     * Strengthを使って攻撃ダメージを計算する。
+     * 攻撃側Statsを反映する。
      *
-     * 仮仕様:
-     * finalDamage = baseDamage * (1 + strength / 100)
-     *
-     * @param attacker 攻撃者
-     * @param baseDamage 元ダメージ
-     * @return Strength反映後のダメージ
+     * 計算順:
+     * 1. Strengthで倍率上昇
+     * 2. Critical Chanceで確率クリティカル
+     * 3. Crit Damageでクリティカル倍率上昇
      */
-    public double calculateStrengthDamage(Player attacker, double baseDamage) {
+    public double calculateAttackDamage(Player attacker, double baseDamage) {
         Objects.requireNonNull(attacker, "attacker");
 
         Optional<StatsData> statsDataOptional = getStatsData(attacker.getUniqueId());
@@ -219,9 +177,64 @@ public class StatsManager {
         StatsData statsData = statsDataOptional.get();
 
         double strength = Math.max(0.0, statsData.getStrength());
-        double multiplier = 1.0 + (strength / 100.0);
+        double strengthMultiplier = 1.0 + (strength / 100.0);
 
-        return baseDamage * multiplier;
+        double damage = baseDamage * strengthMultiplier;
+
+        if (rollCritical(statsData.getCriticalChance())) {
+            double critDamage = Math.max(0.0, statsData.getExtraStat(StatsType.CRIT_DAMAGE));
+            double critMultiplier = 1.0 + (critDamage / 100.0);
+
+            damage *= critMultiplier;
+            attacker.sendMessage("§6✧ クリティカル！");
+        }
+
+        return damage;
+    }
+
+    /**
+     * 防御側Statsを反映する。
+     *
+     * finalDamage = incomingDamage * 100 / (100 + defense)
+     */
+    public double calculateDefenseDamage(Player defender, double incomingDamage) {
+        Objects.requireNonNull(defender, "defender");
+
+        Optional<StatsData> statsDataOptional = getStatsData(defender.getUniqueId());
+
+        if (statsDataOptional.isEmpty()) {
+            return incomingDamage;
+        }
+
+        StatsData statsData = statsDataOptional.get();
+
+        double defense = Math.max(0.0, statsData.getDefense());
+
+        return incomingDamage * (100.0 / (100.0 + defense));
+    }
+
+    public double getMagicFind(Player player) {
+        Objects.requireNonNull(player, "player");
+
+        return getStatsData(player.getUniqueId())
+                .map(StatsData::getMagicFind)
+                .orElse(0.0);
+    }
+
+    public double getExtraStat(Player player, StatsType statsType) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(statsType, "statsType");
+
+        return getStatsData(player.getUniqueId())
+                .map(statsData -> statsData.getExtraStat(statsType))
+                .orElse(statsType.getDefaultValue());
+    }
+
+    private boolean rollCritical(double criticalChance) {
+        double clampedChance = clamp(criticalChance, 0.0, 100.0);
+        double roll = ThreadLocalRandom.current().nextDouble(100.0);
+
+        return roll < clampedChance;
     }
 
     private void loadStatsAsync(UUID uuid) {
@@ -274,16 +287,12 @@ public class StatsManager {
                 DEFAULT_MANA,
                 DEFAULT_STRENGTH,
                 DEFAULT_DEFENSE,
-                DEFAULT_SPEED
+                DEFAULT_SPEED,
+                DEFAULT_CRITICAL_CHANCE,
+                DEFAULT_MAGIC_FIND
         );
     }
 
-    /**
-     * HealthをMinecraft本体へ反映する。
-     *
-     * Stats上のHealthは100, 200, 500など大きくできる。
-     * ただしGUIのハートが増えすぎないよう、Minecraft上の最大体力は最大40HPまでに制限する。
-     */
     private void applyHealth(Player player, StatsData statsData) {
         AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
 
@@ -328,17 +337,6 @@ public class StatsManager {
         }
     }
 
-    /**
-     * Health / Mana をActionBarに表示する。
-     *
-     * 表示は小数点なし。
-     * Minecraft上の実HPは最大40までだが、表示上はStatsのHealthにスケールする。
-     *
-     * 例:
-     * Stats Health = 200
-     * Minecraft実HP = 40 / 40
-     * 表示 = 200 / 200
-     */
     private void sendHealthManaActionBar(Player player, StatsData statsData) {
         double statsMaxHealth = clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH);
         double visualMaxHealth = Math.min(statsMaxHealth, MAX_VISUAL_HEALTH);

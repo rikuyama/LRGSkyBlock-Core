@@ -1,17 +1,12 @@
 package me.lrg.skyblock.core.model;
 
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 /**
  * プレイヤーのステータスデータを保持するModel。
- *
- * このクラスの役割:
- * - Healthを持つ
- * - Manaを持つ
- * - Strengthを持つ
- * - Defenseを持つ
- * - Speedを持つ
  *
  * 注意:
  * - SQLは書かない
@@ -27,6 +22,10 @@ public class StatsData {
     private double strength;
     private double defense;
     private double speed;
+    private double criticalChance;
+    private double magicFind;
+
+    private final EnumMap<StatsType, Double> extraStats = new EnumMap<>(StatsType.class);
 
     public StatsData(
             UUID uuid,
@@ -34,7 +33,9 @@ public class StatsData {
             double mana,
             double strength,
             double defense,
-            double speed
+            double speed,
+            double criticalChance,
+            double magicFind
     ) {
         this.uuid = Objects.requireNonNull(uuid, "uuid");
         this.health = health;
@@ -42,6 +43,12 @@ public class StatsData {
         this.strength = strength;
         this.defense = defense;
         this.speed = speed;
+        this.criticalChance = criticalChance;
+        this.magicFind = magicFind;
+
+        for (StatsType statsType : StatsType.values()) {
+            extraStats.put(statsType, statsType.getDefaultValue());
+        }
     }
 
     public UUID getUuid() {
@@ -86,5 +93,35 @@ public class StatsData {
 
     public void setSpeed(double speed) {
         this.speed = speed;
+    }
+
+    public double getCriticalChance() {
+        return criticalChance;
+    }
+
+    public void setCriticalChance(double criticalChance) {
+        this.criticalChance = criticalChance;
+    }
+
+    public double getMagicFind() {
+        return magicFind;
+    }
+
+    public void setMagicFind(double magicFind) {
+        this.magicFind = magicFind;
+    }
+
+    public double getExtraStat(StatsType statsType) {
+        Objects.requireNonNull(statsType, "statsType");
+        return extraStats.getOrDefault(statsType, statsType.getDefaultValue());
+    }
+
+    public void setExtraStat(StatsType statsType, double value) {
+        Objects.requireNonNull(statsType, "statsType");
+        extraStats.put(statsType, value);
+    }
+
+    public Map<StatsType, Double> getExtraStats() {
+        return Map.copyOf(extraStats);
     }
 }
