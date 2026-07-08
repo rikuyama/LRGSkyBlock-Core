@@ -1,7 +1,9 @@
 package me.lrg.skyblock.core.command;
 
 import me.lrg.skyblock.core.manager.StatsManager;
+import me.lrg.skyblock.core.model.StatsCategory;
 import me.lrg.skyblock.core.model.StatsData;
+import me.lrg.skyblock.core.model.StatsType;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -20,26 +22,42 @@ import java.util.Optional;
  *
  * 使用例:
  * /stats
- * /stats help
+ * /stats all
+ * /stats combat
+ * /stats mining
+ * /stats farming
+ * /stats foraging
+ * /stats fishing
+ * /stats wisdom
+ * /stats luck
  * /stats <player>
+ * /stats <player> <category>
  * /stats set <player> <stat> <value>
- *
- * 注意:
- * - SQLは書かない
- * - Stats操作はStatsManagerへ任せる
- * - 現段階ではオンラインプレイヤーのみ対象
  */
 public class StatsCommand implements CommandExecutor, TabCompleter {
 
     private static final String PERMISSION_USE = "lrgskyblock.command.stats";
     private static final String PERMISSION_ADMIN = "lrgskyblock.command.stats.admin";
 
-    private static final List<String> STAT_NAMES = List.of(
+    private static final List<String> BASE_STAT_NAMES = List.of(
             "health",
             "mana",
             "strength",
             "defense",
-            "speed"
+            "speed",
+            "critical_chance",
+            "magic_find"
+    );
+
+    private static final List<String> DISPLAY_MODES = List.of(
+            "all",
+            "combat",
+            "mining",
+            "farming",
+            "foraging",
+            "fishing",
+            "wisdom",
+            "luck"
     );
 
     private final StatsManager statsManager;
@@ -61,7 +79,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 0) {
-            showOwnStats(sender);
+            showOwnBaseStats(sender);
             return true;
         }
 
@@ -75,20 +93,39 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        showTargetStats(sender, args[0]);
+        if (isDisplayMode(args[0])) {
+            showOwnStatsByMode(sender, args[0]);
+            return true;
+        }
+
+        if (args.length >= 2 && isDisplayMode(args[1])) {
+            showTargetStatsByMode(sender, args[0], args[1]);
+            return true;
+        }
+
+        showTargetBaseStats(sender, args[0]);
         return true;
     }
 
-    private void showOwnStats(CommandSender sender) {
+    private void showOwnBaseStats(CommandSender sender) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage("§cコンソールから使う場合は /stats <プレイヤー名> を使ってください。");
             return;
         }
 
-        showStats(sender, player);
+        showBaseStats(sender, player);
     }
 
-    private void showTargetStats(CommandSender sender, String targetName) {
+    private void showOwnStatsByMode(CommandSender sender, String mode) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§cコンソールから使う場合は /stats <プレイヤー名> <カテゴリ> を使ってください。");
+            return;
+        }
+
+        showStatsByMode(sender, player, mode);
+    }
+
+    private void showTargetBaseStats(CommandSender sender, String targetName) {
         Player target = Bukkit.getPlayerExact(targetName);
 
         if (target == null || !target.isOnline()) {
@@ -96,10 +133,38 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        showStats(sender, target);
+        showBaseStats(sender, target);
     }
 
-    private void showStats(CommandSender sender, Player target) {
+    private void showTargetStatsByMode(CommandSender sender, String targetName, String mode) {
+        Player target = Bukkit.getPlayerExact(targetName);
+
+        if (target == null || !target.isOnline()) {
+            sender.sendMessage("§c指定したプレイヤーがオンラインではありません。");
+            return;
+        }
+
+        showStatsByMode(sender, target, mode);
+    }
+
+    private void showStatsByMode(CommandSender sender, Player target, String mode) {
+        if (mode.equalsIgnoreCase("all")) {
+            showAllStats(sender, target);
+            return;
+        }
+
+        Optional<StatsCategory> categoryOptional = StatsCategory.fromKey(mode);
+
+        if (categoryOptional.isEmpty()) {
+            sender.sendMessage("§c存在しないStatsカテゴリです。");
+            sendUsage(sender);
+            return;
+        }
+
+        showCategoryStats(sender, target, categoryOptional.get());
+    }
+
+    private void showBaseStats(CommandSender sender, Player target) {
         Optional<StatsData> statsDataOptional = statsManager.getStatsData(target.getUniqueId());
 
         if (statsDataOptional.isEmpty()) {
@@ -109,12 +174,101 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
 
         StatsData statsData = statsDataOptional.get();
 
-        sender.sendMessage("§6==== §e" + target.getName() + " のStats §6====");
-        sender.sendMessage("§cHealth: §f" + format(statsData.getHealth()));
-        sender.sendMessage("§bMana: §f" + format(statsData.getMana()));
-        sender.sendMessage("§4Strength: §f" + format(statsData.getStrength()));
-        sender.sendMessage("§aDefense: §f" + format(statsData.getDefense()));
-        sender.sendMessage("§fSpeed: §f" + format(statsData.getSpeed()));
+        sender.sendMessage("§6==== §e" + target.getName() + " の基本ステータス §6====");
+        sendBaseStats(sender, statsData);
+        sender.sendMessage("§7他カテゴリ: /stats combat, /stats mining, /stats farming, /stats fishing");
+        sender.sendMessage("§7全表示: /stats all");
+    }
+
+    private void showAllStats(CommandSender sender, Player target) {
+        Optional<StatsData> statsDataOptional = statsManager.getStatsData(target.getUniqueId());
+
+        if (statsDataOptional.isEmpty()) {
+            sender.sendMessage("§c対象プレイヤーのStatsDataがまだ読み込まれていません。");
+            return;
+        }
+
+        StatsData statsData = statsDataOptional.get();
+
+        sender.sendMessage("§6==== §e" + target.getName() + " の全ステータス §6====");
+
+        sender.sendMessage("§e[基本ステータス]");
+        sendBaseStats(sender, statsData);
+
+        for (StatsCategory category : StatsCategory.values()) {
+            sender.sendMessage("§e[" + category.getDisplayName() + "]");
+            sendCategoryLines(sender, statsData, category);
+        }
+
+        sender.sendMessage("§7※ 未実装のStatsは現在、保存・表示のみです。");
+    }
+
+    private void showCategoryStats(CommandSender sender, Player target, StatsCategory category) {
+        Optional<StatsData> statsDataOptional = statsManager.getStatsData(target.getUniqueId());
+
+        if (statsDataOptional.isEmpty()) {
+            sender.sendMessage("§c対象プレイヤーのStatsDataがまだ読み込まれていません。");
+            return;
+        }
+
+        StatsData statsData = statsDataOptional.get();
+
+        sender.sendMessage("§6==== §e" + target.getName() + " の " + category.getDisplayName() + " §6====");
+
+        if (category == StatsCategory.COMBAT) {
+            sender.sendMessage("§e[基本戦闘Stats]");
+            sender.sendMessage(formatBaseStatLine("ヘルス", statsData.getHealth(), true));
+            sender.sendMessage(formatBaseStatLine("マナ", statsData.getMana(), true));
+            sender.sendMessage(formatBaseStatLine("ストレングス", statsData.getStrength(), true));
+            sender.sendMessage(formatBaseStatLine("ディフェンス", statsData.getDefense(), true));
+            sender.sendMessage(formatBaseStatLine("クリティカル率", statsData.getCriticalChance(), true) + "§f%");
+        }
+
+        if (category == StatsCategory.LUCK) {
+            sender.sendMessage("§e[基本運Stats]");
+            sender.sendMessage(formatBaseStatLine("マジックファインド", statsData.getMagicFind(), false));
+        }
+
+        sendCategoryLines(sender, statsData, category);
+        sender.sendMessage("§7※ 未実装のStatsは現在、保存・表示のみです。");
+    }
+
+    private void sendBaseStats(CommandSender sender, StatsData statsData) {
+        sender.sendMessage(formatBaseStatLine("ヘルス", statsData.getHealth(), true));
+        sender.sendMessage(formatBaseStatLine("マナ", statsData.getMana(), true));
+        sender.sendMessage(formatBaseStatLine("ストレングス", statsData.getStrength(), true));
+        sender.sendMessage(formatBaseStatLine("ディフェンス", statsData.getDefense(), true));
+        sender.sendMessage(formatBaseStatLine("スピード", statsData.getSpeed(), true));
+        sender.sendMessage(formatBaseStatLine("クリティカル率", statsData.getCriticalChance(), true) + "§f%");
+        sender.sendMessage(formatBaseStatLine("マジックファインド", statsData.getMagicFind(), false));
+    }
+
+    private void sendCategoryLines(CommandSender sender, StatsData statsData, StatsCategory category) {
+        boolean hasAny = false;
+
+        for (StatsType statsType : StatsType.values()) {
+            if (statsType.getCategory() != category) {
+                continue;
+            }
+
+            hasAny = true;
+            sender.sendMessage(formatExtraStatLine(statsType, statsData.getExtraStat(statsType)));
+        }
+
+        if (!hasAny) {
+            sender.sendMessage("§7このカテゴリにはStatsがありません。");
+        }
+    }
+
+    private String formatBaseStatLine(String displayName, double value, boolean implemented) {
+        String status = implemented ? "§a実装済み" : "§7未実装";
+        return "§7" + displayName + ": §f" + format(value) + " §8[" + status + "§8]";
+    }
+
+    private String formatExtraStatLine(StatsType statsType, double value) {
+        return "§7" + statsType.getDisplayName()
+                + ": §f" + format(value)
+                + " §8[" + statsType.getImplementationStatusText() + "§8]";
     }
 
     private void setStats(CommandSender sender, String[] args) {
@@ -138,12 +292,6 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
 
         String statName = args[2].toLowerCase();
 
-        if (!STAT_NAMES.contains(statName)) {
-            sender.sendMessage("§c存在しないステータスです。");
-            sender.sendMessage("§7使用可能: health, mana, strength, defense, speed");
-            return;
-        }
-
         Double value = parseValue(sender, args[3]);
 
         if (value == null) {
@@ -153,14 +301,15 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         boolean success = setStatValue(target, statName, value);
 
         if (!success) {
-            sender.sendMessage("§cStatsの変更に失敗しました。");
+            sender.sendMessage("§c存在しないステータスです。");
+            sender.sendMessage("§7/stats help で使用可能Statsを確認してください。");
             return;
         }
 
         statsManager.applyStatsToPlayer(target);
 
-        sender.sendMessage("§a" + target.getName() + " の " + statName + " を " + format(value) + " に設定しました。");
-        showStats(sender, target);
+        sender.sendMessage("§a" + target.getName() + " の " + getDisplayName(statName) + " を " + format(value) + " に設定しました。");
+        showBaseStats(sender, target);
     }
 
     private boolean setStatValue(Player target, String statName, double value) {
@@ -178,12 +327,35 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             case "strength" -> statsData.setStrength(value);
             case "defense" -> statsData.setDefense(value);
             case "speed" -> statsData.setSpeed(value);
+            case "critical_chance" -> statsData.setCriticalChance(value);
+            case "magic_find" -> statsData.setMagicFind(value);
             default -> {
-                return false;
+                Optional<StatsType> statsTypeOptional = StatsType.fromKey(statName);
+
+                if (statsTypeOptional.isEmpty()) {
+                    return false;
+                }
+
+                statsData.setExtraStat(statsTypeOptional.get(), value);
             }
         }
 
         return true;
+    }
+
+    private String getDisplayName(String statName) {
+        return switch (statName) {
+            case "health" -> "ヘルス";
+            case "mana" -> "マナ";
+            case "strength" -> "ストレングス";
+            case "defense" -> "ディフェンス";
+            case "speed" -> "スピード";
+            case "critical_chance" -> "クリティカル率";
+            case "magic_find" -> "マジックファインド";
+            default -> StatsType.fromKey(statName)
+                    .map(StatsType::getDisplayName)
+                    .orElse(statName);
+        };
     }
 
     private Double parseValue(CommandSender sender, String text) {
@@ -210,13 +382,31 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         return String.format("%.2f", value);
     }
 
+    private boolean isDisplayMode(String input) {
+        return DISPLAY_MODES.stream()
+                .anyMatch(mode -> mode.equalsIgnoreCase(input));
+    }
+
     private void sendUsage(CommandSender sender) {
         sender.sendMessage("§eStatsコマンド:");
-        sender.sendMessage("§7/stats §f- 自分のStatsを確認");
-        sender.sendMessage("§7/stats help §f- ヘルプを表示");
-        sender.sendMessage("§7/stats <プレイヤー名> §f- 指定プレイヤーのStatsを確認");
-        sender.sendMessage("§7/stats set <プレイヤー名> <stat> <value> §f- Statsを変更");
-        sender.sendMessage("§7使用可能stat: health, mana, strength, defense, speed");
+        sender.sendMessage("§7/stats §f- 自分の基本ステータスを確認");
+        sender.sendMessage("§7/stats all §f- 自分の全ステータスを確認");
+        sender.sendMessage("§7/stats <カテゴリ> §f- 自分のカテゴリ別Statsを確認");
+        sender.sendMessage("§7/stats <プレイヤー名> §f- 指定プレイヤーの基本ステータスを確認");
+        sender.sendMessage("§7/stats <プレイヤー名> <カテゴリ> §f- 指定プレイヤーのカテゴリ別Statsを確認");
+        sender.sendMessage("§7/stats set <プレイヤー名> <stat> <value> §f- ステータスを変更");
+
+        sender.sendMessage("§eカテゴリ:");
+        sender.sendMessage("§7all, combat, mining, farming, foraging, fishing, wisdom, luck");
+
+        sender.sendMessage("§e基本Stats:");
+        sender.sendMessage("§7health=ヘルス, mana=マナ, strength=ストレングス, defense=ディフェンス, speed=スピード, critical_chance=クリティカル率, magic_find=マジックファインド");
+
+        sender.sendMessage("§e追加Stats:");
+        sender.sendMessage("§7" + String.join(", ", getExtraStatKeys()));
+
+        sender.sendMessage("§7※ 実装済みStatsはゲーム内効果があります。");
+        sender.sendMessage("§7※ 未実装Statsは現在、保存・表示のみです。");
     }
 
     @Override
@@ -234,6 +424,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             List<String> completions = new ArrayList<>();
 
             completions.add("help");
+            completions.addAll(DISPLAY_MODES);
 
             Bukkit.getOnlinePlayers()
                     .stream()
@@ -248,12 +439,17 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 2) {
-            if (!args[0].equalsIgnoreCase("set")) {
-                return Collections.emptyList();
-            }
+            if (args[0].equalsIgnoreCase("set")) {
+                if (!sender.hasPermission(PERMISSION_ADMIN)) {
+                    return Collections.emptyList();
+                }
 
-            if (!sender.hasPermission(PERMISSION_ADMIN)) {
-                return Collections.emptyList();
+                List<String> playerNames = Bukkit.getOnlinePlayers()
+                        .stream()
+                        .map(Player::getName)
+                        .toList();
+
+                return filterStartsWith(playerNames, args[1]);
             }
 
             List<String> playerNames = Bukkit.getOnlinePlayers()
@@ -261,7 +457,11 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
                     .map(Player::getName)
                     .toList();
 
-            return filterStartsWith(playerNames, args[1]);
+            if (playerNames.stream().anyMatch(name -> name.equalsIgnoreCase(args[0]))) {
+                return filterStartsWith(DISPLAY_MODES, args[1]);
+            }
+
+            return Collections.emptyList();
         }
 
         if (args.length == 3) {
@@ -273,7 +473,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
                 return Collections.emptyList();
             }
 
-            return filterStartsWith(STAT_NAMES, args[2]);
+            return filterStartsWith(getAllStatKeys(), args[2]);
         }
 
         if (args.length == 4) {
@@ -288,6 +488,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             List<String> values = List.of(
                     "0",
                     "10",
+                    "30",
                     "50",
                     "100",
                     "200",
@@ -299,6 +500,22 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         }
 
         return Collections.emptyList();
+    }
+
+    private List<String> getAllStatKeys() {
+        List<String> keys = new ArrayList<>(BASE_STAT_NAMES);
+        keys.addAll(getExtraStatKeys());
+        return keys;
+    }
+
+    private List<String> getExtraStatKeys() {
+        List<String> keys = new ArrayList<>();
+
+        for (StatsType statsType : StatsType.values()) {
+            keys.add(statsType.getKey());
+        }
+
+        return keys;
     }
 
     private List<String> filterStartsWith(List<String> values, String input) {
