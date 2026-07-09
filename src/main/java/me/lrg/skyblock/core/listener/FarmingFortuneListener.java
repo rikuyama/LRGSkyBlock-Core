@@ -7,6 +7,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,19 +17,6 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Collection;
 import java.util.Objects;
 
-/**
- * Farming Fortuneを作物ドロップへ反映するListener。
- *
- * このクラスの役割:
- * - 作物ブロック破壊を受け取る
- * - FortuneManagerでドロップ量を計算する
- * - Fortune対象アイテムだけ増やして落とす
- *
- * 注意:
- * - SQLは書かない
- * - StatsDataを直接触らない
- * - Fortune計算はFortuneManagerに任せる
- */
 public class FarmingFortuneListener implements Listener {
 
     private final FortuneManager fortuneManager;
@@ -37,7 +25,7 @@ public class FarmingFortuneListener implements Listener {
         this.fortuneManager = Objects.requireNonNull(fortuneManager, "fortuneManager");
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
         Block block = event.getBlock();
@@ -61,12 +49,14 @@ public class FarmingFortuneListener implements Listener {
         }
 
         double fortune = fortuneManager.getFarmingFortune(player, blockType);
+        ItemStack originalTool = player.getInventory().getItemInMainHand();
 
-        if (fortune <= 0.0) {
+        if (fortune <= 0.0 && !hasFortune(originalTool)) {
             return;
         }
 
-        Collection<ItemStack> originalDrops = block.getDrops(player.getInventory().getItemInMainHand(), player);
+        ItemStack toolWithoutFortune = createToolWithoutFortune(originalTool);
+        Collection<ItemStack> originalDrops = block.getDrops(toolWithoutFortune, player);
 
         if (originalDrops.isEmpty()) {
             return;
@@ -79,7 +69,7 @@ public class FarmingFortuneListener implements Listener {
         for (ItemStack originalDrop : originalDrops) {
             ItemStack finalDrop = originalDrop.clone();
 
-            if (shouldApplyFortune(blockType, finalDrop.getType())) {
+            if (fortune > 0.0 && shouldApplyFortune(blockType, finalDrop.getType())) {
                 int finalAmount = fortuneManager.calculateDropAmount(finalDrop.getAmount(), fortune);
                 finalDrop.setAmount(finalAmount);
             }
@@ -88,18 +78,11 @@ public class FarmingFortuneListener implements Listener {
         }
     }
 
-    /**
-     * サトウキビ・竹・サボテン専用。
-     *
-     * 重要:
-     * - event.setDropItems(false) だけだと上のブロックが通常ドロップする可能性がある
-     * - そのためイベントをキャンセルして、対象ブロックを全部手動でAIRにする
-     * - 壊したブロック数にFortuneを乗せて、まとめてドロップする
-     */
     private void handleVerticalCrop(BlockBreakEvent event, Player player, Block block, Material blockType) {
         double fortune = fortuneManager.getFarmingFortune(player, blockType);
+        ItemStack originalTool = player.getInventory().getItemInMainHand();
 
-        if (fortune <= 0.0) {
+        if (fortune <= 0.0 && !hasFortune(originalTool)) {
             return;
         }
 
@@ -117,7 +100,11 @@ public class FarmingFortuneListener implements Listener {
             return;
         }
 
-        int finalAmount = fortuneManager.calculateDropAmount(brokenAmount, fortune);
+        int finalAmount = brokenAmount;
+
+        if (fortune > 0.0) {
+            finalAmount = fortuneManager.calculateDropAmount(brokenAmount, fortune);
+        }
 
         if (finalAmount <= 0) {
             return;
@@ -129,16 +116,23 @@ public class FarmingFortuneListener implements Listener {
         block.getWorld().dropItemNaturally(dropLocation, dropItem);
     }
 
-    /**
-     * 壊した位置から上方向に、同じ縦作物が何個あるか数える。
-     *
-     * 例:
-     * サトウキビ3段の一番下を壊す
-     * -> 3個として数える
-     *
-     * 真ん中を壊す
-     * -> 真ん中 + 上だけ数える
-     */
+    private ItemStack createToolWithoutFortune(ItemStack originalTool) {
+        if (originalTool == null || originalTool.getType() == Material.AIR) {
+            return new ItemStack(Material.AIR);
+        }
+
+        ItemStack tool = originalTool.clone();
+        tool.removeEnchantment(Enchantment.FORTUNE);
+
+        return tool;
+    }
+
+    private boolean hasFortune(ItemStack tool) {
+        return tool != null
+                && tool.getType() != Material.AIR
+                && tool.getEnchantmentLevel(Enchantment.FORTUNE) > 0;
+    }
+
     private int countVerticalCropBlocks(Block startBlock, Material material) {
         int count = 0;
         Block currentBlock = startBlock;
@@ -150,10 +144,6 @@ public class FarmingFortuneListener implements Listener {
 
         return count;
     }
-
-    /**
-     * 壊した位置から上方向の縦作物を全部AIRにする。
-     */
 
     private boolean isFarmingFortuneTarget(Material material) {
         return switch (material) {
@@ -175,10 +165,6 @@ public class FarmingFortuneListener implements Listener {
         };
     }
 
-    /**
-     * 成長段階がある作物は最大成長だけFortune対象にする。
-     * サトウキビ・竹・サボテン・カボチャ・スイカなどはAgeableではないので常にtrue。
-     */
     private boolean isFullyGrown(Block block) {
         BlockData blockData = block.getBlockData();
 
@@ -208,10 +194,6 @@ public class FarmingFortuneListener implements Listener {
         };
     }
 
-    /**
-     * 作物本体だけFortuneを乗せる。
-     * 種などにはFortuneを乗せない。
-     */
     private boolean shouldApplyFortune(Material blockType, Material dropType) {
         return switch (blockType) {
             case WHEAT -> dropType == Material.WHEAT;
