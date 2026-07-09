@@ -1,6 +1,7 @@
 package me.lrg.skyblock.core.listener;
 
 import me.lrg.skyblock.core.manager.FortuneManager;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -46,6 +47,15 @@ public class FarmingFortuneListener implements Listener {
             return;
         }
 
+        if (isVerticalCrop(blockType)) {
+            handleVerticalCrop(event, player, block, blockType);
+            return;
+        }
+
+        handleNormalCrop(event, player, block, blockType);
+    }
+
+    private void handleNormalCrop(BlockBreakEvent event, Player player, Block block, Material blockType) {
         if (!isFullyGrown(block)) {
             return;
         }
@@ -78,6 +88,73 @@ public class FarmingFortuneListener implements Listener {
         }
     }
 
+    /**
+     * サトウキビ・竹・サボテン専用。
+     *
+     * 重要:
+     * - event.setDropItems(false) だけだと上のブロックが通常ドロップする可能性がある
+     * - そのためイベントをキャンセルして、対象ブロックを全部手動でAIRにする
+     * - 壊したブロック数にFortuneを乗せて、まとめてドロップする
+     */
+    private void handleVerticalCrop(BlockBreakEvent event, Player player, Block block, Material blockType) {
+        double fortune = fortuneManager.getFarmingFortune(player, blockType);
+
+        if (fortune <= 0.0) {
+            return;
+        }
+
+        int brokenAmount = countVerticalCropBlocks(block, blockType);
+
+        if (brokenAmount <= 0) {
+            return;
+        }
+
+        event.setDropItems(false);
+
+        Material dropMaterial = getVerticalCropDropMaterial(blockType);
+
+        if (dropMaterial == Material.AIR) {
+            return;
+        }
+
+        int finalAmount = fortuneManager.calculateDropAmount(brokenAmount, fortune);
+
+        if (finalAmount <= 0) {
+            return;
+        }
+
+        ItemStack dropItem = new ItemStack(dropMaterial, finalAmount);
+        Location dropLocation = block.getLocation().add(0.5, 0.5, 0.5);
+
+        block.getWorld().dropItemNaturally(dropLocation, dropItem);
+    }
+
+    /**
+     * 壊した位置から上方向に、同じ縦作物が何個あるか数える。
+     *
+     * 例:
+     * サトウキビ3段の一番下を壊す
+     * -> 3個として数える
+     *
+     * 真ん中を壊す
+     * -> 真ん中 + 上だけ数える
+     */
+    private int countVerticalCropBlocks(Block startBlock, Material material) {
+        int count = 0;
+        Block currentBlock = startBlock;
+
+        while (currentBlock.getType() == material) {
+            count++;
+            currentBlock = currentBlock.getRelative(0, 1, 0);
+        }
+
+        return count;
+    }
+
+    /**
+     * 壊した位置から上方向の縦作物を全部AIRにする。
+     */
+
     private boolean isFarmingFortuneTarget(Material material) {
         return switch (material) {
             case WHEAT,
@@ -85,6 +162,8 @@ public class FarmingFortuneListener implements Listener {
                  POTATOES,
                  PUMPKIN,
                  SUGAR_CANE,
+                 BAMBOO,
+                 BAMBOO_SAPLING,
                  MELON,
                  CACTUS,
                  COCOA,
@@ -98,7 +177,7 @@ public class FarmingFortuneListener implements Listener {
 
     /**
      * 成長段階がある作物は最大成長だけFortune対象にする。
-     * サトウキビ・サボテン・カボチャ・スイカなどはAgeableではないので常にtrue。
+     * サトウキビ・竹・サボテン・カボチャ・スイカなどはAgeableではないので常にtrue。
      */
     private boolean isFullyGrown(Block block) {
         BlockData blockData = block.getBlockData();
@@ -108,6 +187,25 @@ public class FarmingFortuneListener implements Listener {
         }
 
         return ageable.getAge() >= ageable.getMaximumAge();
+    }
+
+    private boolean isVerticalCrop(Material material) {
+        return switch (material) {
+            case SUGAR_CANE,
+                 BAMBOO,
+                 BAMBOO_SAPLING,
+                 CACTUS -> true;
+            default -> false;
+        };
+    }
+
+    private Material getVerticalCropDropMaterial(Material blockType) {
+        return switch (blockType) {
+            case SUGAR_CANE -> Material.SUGAR_CANE;
+            case BAMBOO, BAMBOO_SAPLING -> Material.BAMBOO;
+            case CACTUS -> Material.CACTUS;
+            default -> Material.AIR;
+        };
     }
 
     /**
@@ -121,6 +219,7 @@ public class FarmingFortuneListener implements Listener {
             case POTATOES -> dropType == Material.POTATO;
             case PUMPKIN -> dropType == Material.PUMPKIN;
             case SUGAR_CANE -> dropType == Material.SUGAR_CANE;
+            case BAMBOO, BAMBOO_SAPLING -> dropType == Material.BAMBOO;
             case MELON -> dropType == Material.MELON_SLICE;
             case CACTUS -> dropType == Material.CACTUS;
             case COCOA -> dropType == Material.COCOA_BEANS;
