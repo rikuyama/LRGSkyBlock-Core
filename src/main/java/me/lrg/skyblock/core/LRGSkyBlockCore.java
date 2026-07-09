@@ -5,6 +5,7 @@ import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
 import me.lrg.skyblock.core.listener.FarmingFortuneListener;
+import me.lrg.skyblock.core.listener.MiningFortuneListener;
 import me.lrg.skyblock.core.listener.PlayerCombatListener;
 import me.lrg.skyblock.core.listener.PlayerListener;
 import me.lrg.skyblock.core.manager.CoinManager;
@@ -108,6 +109,11 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(
                 new FarmingFortuneListener(fortuneManager),
+                this
+        );
+
+        getServer().getPluginManager().registerEvents(
+                new MiningFortuneListener(fortuneManager),
                 this
         );
     }
