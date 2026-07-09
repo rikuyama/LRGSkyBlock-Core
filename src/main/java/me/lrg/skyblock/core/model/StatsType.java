@@ -48,6 +48,7 @@ public enum StatsType {
     POTATO_FORTUNE("potato_fortune", "ジャガイモフォーチュン", 0.0, true, StatsCategory.FARMING),
     PUMPKIN_FORTUNE("pumpkin_fortune", "カボチャフォーチュン", 0.0, true, StatsCategory.FARMING),
     SUGAR_CANE_FORTUNE("sugar_cane_fortune", "サトウキビフォーチュン", 0.0, true, StatsCategory.FARMING),
+    BAMBOO_FORTUNE("bamboo_fortune", "竹フォーチュン", 0.0, true, StatsCategory.FARMING),
     MELON_SLICE_FORTUNE("melon_slice_fortune", "スイカフォーチュン", 0.0, true, StatsCategory.FARMING),
     CACTUS_FORTUNE("cactus_fortune", "サボテンフォーチュン", 0.0, true, StatsCategory.FARMING),
     COCOA_BEANS_FORTUNE("cocoa_beans_fortune", "カカオ豆フォーチュン", 0.0, true, StatsCategory.FARMING),

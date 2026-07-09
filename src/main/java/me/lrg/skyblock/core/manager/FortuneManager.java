@@ -59,11 +59,6 @@ public class FortuneManager {
 
     /**
      * 採掘用Fortuneを取得する。
-     *
-     * mining_fortune は全体に加算。
-     * 鉱石なら ore_fortune も加算。
-     * 石・丸石系なら block_fortune も加算。
-     * ジェムストーン系なら gemstone_fortune も加算。
      */
     public double getMiningFortune(Player player, Material material) {
         Objects.requireNonNull(player, "player");
@@ -108,6 +103,7 @@ public class FortuneManager {
             case POTATO, POTATOES -> statsManager.getExtraStat(player, StatsType.POTATO_FORTUNE);
             case PUMPKIN, PUMPKIN_SEEDS -> statsManager.getExtraStat(player, StatsType.PUMPKIN_FORTUNE);
             case SUGAR_CANE -> statsManager.getExtraStat(player, StatsType.SUGAR_CANE_FORTUNE);
+            case BAMBOO, BAMBOO_SAPLING -> statsManager.getExtraStat(player, StatsType.BAMBOO_FORTUNE);
             case MELON, MELON_SLICE, MELON_SEEDS -> statsManager.getExtraStat(player, StatsType.MELON_SLICE_FORTUNE);
             case CACTUS -> statsManager.getExtraStat(player, StatsType.CACTUS_FORTUNE);
             case COCOA, COCOA_BEANS -> statsManager.getExtraStat(player, StatsType.COCOA_BEANS_FORTUNE);
