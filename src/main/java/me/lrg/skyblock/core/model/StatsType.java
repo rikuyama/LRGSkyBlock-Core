@@ -3,26 +3,6 @@ package me.lrg.skyblock.core.model;
 import java.util.Arrays;
 import java.util.Optional;
 
-/**
- * 追加Statsの種類。
- *
- * 既存の基本Stats:
- * - health
- * - mana
- * - strength
- * - defense
- * - speed
- * - critical_chance
- * - magic_find
- *
- * 追加Stats:
- * - player_extra_stats テーブルに保存する
- *
- * 表記方針:
- * - Fortune / Wisdom / Ferocity など、Hypixel用語っぽいものはカタカナ寄せ
- * - Ore / Spread / Speed など、直訳の方が自然なものは日本語にする
- * - Intelligenceは使わず、LRG SkyBlockではMana表記に統一する
- */
 public enum StatsType {
 
     CRIT_DAMAGE("crit_damage", "クリティカルダメージ", 50.0, true, StatsCategory.COMBAT),
@@ -55,7 +35,7 @@ public enum StatsType {
     MUSHROOM_FORTUNE("mushroom_fortune", "キノコフォーチュン", 0.0, true, StatsCategory.FARMING),
     NETHER_WART_FORTUNE("nether_wart_fortune", "ネザーウォートフォーチュン", 0.0, true, StatsCategory.FARMING),
 
-    FORAGING_FORTUNE("foraging_fortune", "伐採フォーチュン", 0.0, false, StatsCategory.FORAGING),
+    FORAGING_FORTUNE("foraging_fortune", "伐採フォーチュン", 0.0, true, StatsCategory.FORAGING),
 
     FISHING_SPEED("fishing_speed", "釣り速度", 0.0, false, StatsCategory.FISHING),
     SEA_CREATURE_CHANCE("sea_creature_chance", "海の生物出現率", 20.0, false, StatsCategory.FISHING),

@@ -5,6 +5,7 @@ import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
 import me.lrg.skyblock.core.listener.FarmingFortuneListener;
+import me.lrg.skyblock.core.listener.ForagingFortuneListener;
 import me.lrg.skyblock.core.listener.MiningFortuneListener;
 import me.lrg.skyblock.core.listener.PlayerCombatListener;
 import me.lrg.skyblock.core.listener.PlayerListener;
@@ -19,9 +20,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.logging.Level;
 
-/**
- * LRG SkyBlock Core のメインクラス。
- */
 public final class LRGSkyBlockCore extends JavaPlugin {
 
     private DatabaseManager databaseManager;
@@ -114,6 +112,11 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(
                 new MiningFortuneListener(fortuneManager),
+                this
+        );
+
+        getServer().getPluginManager().registerEvents(
+                new ForagingFortuneListener(fortuneManager),
                 this
         );
     }
