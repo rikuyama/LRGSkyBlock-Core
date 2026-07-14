@@ -1,13 +1,13 @@
 package me.lrg.skyblock.core.listener;
 
 import me.lrg.skyblock.core.manager.FortuneManager;
+import me.lrg.skyblock.core.util.FortuneToolUtil;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -51,11 +51,11 @@ public class FarmingFortuneListener implements Listener {
         double fortune = fortuneManager.getFarmingFortune(player, blockType);
         ItemStack originalTool = player.getInventory().getItemInMainHand();
 
-        if (fortune <= 0.0 && !hasFortune(originalTool)) {
+        if (fortune <= 0.0 && !FortuneToolUtil.hasVanillaFortune(originalTool)) {
             return;
         }
 
-        ItemStack toolWithoutFortune = createToolWithoutFortune(originalTool);
+        ItemStack toolWithoutFortune = FortuneToolUtil.createWithoutVanillaFortune(originalTool);
         Collection<ItemStack> originalDrops = block.getDrops(toolWithoutFortune, player);
 
         if (originalDrops.isEmpty()) {
@@ -63,7 +63,6 @@ public class FarmingFortuneListener implements Listener {
         }
 
         event.setDropItems(false);
-
         World world = block.getWorld();
 
         for (ItemStack originalDrop : originalDrops) {
@@ -82,29 +81,25 @@ public class FarmingFortuneListener implements Listener {
         double fortune = fortuneManager.getFarmingFortune(player, blockType);
         ItemStack originalTool = player.getInventory().getItemInMainHand();
 
-        if (fortune <= 0.0 && !hasFortune(originalTool)) {
+        if (fortune <= 0.0 && !FortuneToolUtil.hasVanillaFortune(originalTool)) {
             return;
         }
 
         int brokenAmount = countVerticalCropBlocks(block, blockType);
-
         if (brokenAmount <= 0) {
             return;
         }
 
         event.setDropItems(false);
-
         Material dropMaterial = getVerticalCropDropMaterial(blockType);
 
         if (dropMaterial == Material.AIR) {
             return;
         }
 
-        int finalAmount = brokenAmount;
-
-        if (fortune > 0.0) {
-            finalAmount = fortuneManager.calculateDropAmount(brokenAmount, fortune);
-        }
+        int finalAmount = fortune > 0.0
+                ? fortuneManager.calculateDropAmount(brokenAmount, fortune)
+                : brokenAmount;
 
         if (finalAmount <= 0) {
             return;
@@ -112,25 +107,7 @@ public class FarmingFortuneListener implements Listener {
 
         ItemStack dropItem = new ItemStack(dropMaterial, finalAmount);
         Location dropLocation = block.getLocation().add(0.5, 0.5, 0.5);
-
         block.getWorld().dropItemNaturally(dropLocation, dropItem);
-    }
-
-    private ItemStack createToolWithoutFortune(ItemStack originalTool) {
-        if (originalTool == null || originalTool.getType() == Material.AIR) {
-            return new ItemStack(Material.AIR);
-        }
-
-        ItemStack tool = originalTool.clone();
-        tool.removeEnchantment(Enchantment.FORTUNE);
-
-        return tool;
-    }
-
-    private boolean hasFortune(ItemStack tool) {
-        return tool != null
-                && tool.getType() != Material.AIR
-                && tool.getEnchantmentLevel(Enchantment.FORTUNE) > 0;
     }
 
     private int countVerticalCropBlocks(Block startBlock, Material material) {
@@ -147,40 +124,25 @@ public class FarmingFortuneListener implements Listener {
 
     private boolean isFarmingFortuneTarget(Material material) {
         return switch (material) {
-            case WHEAT,
-                 CARROTS,
-                 POTATOES,
-                 PUMPKIN,
-                 SUGAR_CANE,
-                 BAMBOO,
-                 BAMBOO_SAPLING,
-                 MELON,
-                 CACTUS,
-                 COCOA,
-                 BROWN_MUSHROOM,
-                 RED_MUSHROOM,
-                 MUSHROOM_STEM,
-                 NETHER_WART -> true;
+            case WHEAT, CARROTS, POTATOES, PUMPKIN,
+                 SUGAR_CANE, BAMBOO, BAMBOO_SAPLING,
+                 MELON, CACTUS, COCOA, BROWN_MUSHROOM,
+                 RED_MUSHROOM, MUSHROOM_STEM, NETHER_WART -> true;
             default -> false;
         };
     }
 
     private boolean isFullyGrown(Block block) {
         BlockData blockData = block.getBlockData();
-
         if (!(blockData instanceof Ageable ageable)) {
             return true;
         }
-
         return ageable.getAge() >= ageable.getMaximumAge();
     }
 
     private boolean isVerticalCrop(Material material) {
         return switch (material) {
-            case SUGAR_CANE,
-                 BAMBOO,
-                 BAMBOO_SAPLING,
-                 CACTUS -> true;
+            case SUGAR_CANE, BAMBOO, BAMBOO_SAPLING, CACTUS -> true;
             default -> false;
         };
     }
