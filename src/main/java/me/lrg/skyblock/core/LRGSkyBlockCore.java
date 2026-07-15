@@ -2,6 +2,7 @@ package me.lrg.skyblock.core;
 
 import me.lrg.skyblock.core.command.CoinCommand;
 import me.lrg.skyblock.core.command.StatsCommand;
+import me.lrg.skyblock.core.config.FortuneTargetSettings;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
 import me.lrg.skyblock.core.listener.FarmingFortuneListener;
@@ -23,16 +24,14 @@ import java.util.logging.Level;
 public final class LRGSkyBlockCore extends JavaPlugin {
 
     private DatabaseManager databaseManager;
-
     private PlayerRepository playerRepository;
     private StatsRepository statsRepository;
-
     private PlayerManager playerManager;
     private CoinManager coinManager;
     private StatsManager statsManager;
     private FortuneManager fortuneManager;
-
     private PlayerDefaultSettings playerDefaultSettings;
+    private FortuneTargetSettings fortuneTargetSettings;
 
     @Override
     public void onEnable() {
@@ -57,15 +56,11 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     @Override
     public void onDisable() {
         stopTasks();
-
         savePlayerDataOnShutdown();
         saveStatsDataOnShutdown();
-
         clearPlayerCache();
         clearStatsCache();
-
         closeDatabase();
-
         getLogger().info("LRG SkyBlock Core を停止しました。");
     }
 
@@ -75,6 +70,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
     private void setupConfigs() {
         this.playerDefaultSettings = PlayerDefaultSettings.from(this);
+        this.fortuneTargetSettings = FortuneTargetSettings.load(this);
     }
 
     private void setupRepositories() {
@@ -83,42 +79,18 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     }
 
     private void setupManagers() {
-        this.playerManager = new PlayerManager(
-                this,
-                playerRepository,
-                playerDefaultSettings
-        );
-
+        this.playerManager = new PlayerManager(this, playerRepository, playerDefaultSettings);
         this.coinManager = new CoinManager(playerManager);
         this.statsManager = new StatsManager(this, statsRepository);
-        this.fortuneManager = new FortuneManager(statsManager);
+        this.fortuneManager = new FortuneManager(statsManager, fortuneTargetSettings);
     }
 
     private void registerListeners() {
-        getServer().getPluginManager().registerEvents(
-                new PlayerListener(playerManager, statsManager),
-                this
-        );
-
-        getServer().getPluginManager().registerEvents(
-                new PlayerCombatListener(statsManager),
-                this
-        );
-
-        getServer().getPluginManager().registerEvents(
-                new FarmingFortuneListener(fortuneManager),
-                this
-        );
-
-        getServer().getPluginManager().registerEvents(
-                new MiningFortuneListener(fortuneManager),
-                this
-        );
-
-        getServer().getPluginManager().registerEvents(
-                new ForagingFortuneListener(fortuneManager),
-                this
-        );
+        getServer().getPluginManager().registerEvents(new PlayerListener(playerManager, statsManager), this);
+        getServer().getPluginManager().registerEvents(new PlayerCombatListener(statsManager), this);
+        getServer().getPluginManager().registerEvents(new FarmingFortuneListener(fortuneManager), this);
+        getServer().getPluginManager().registerEvents(new MiningFortuneListener(fortuneManager), this);
+        getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager), this);
     }
 
     private void registerCommands() {
@@ -128,7 +100,6 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             getLogger().warning("plugin.yml に coins コマンドが登録されていません。");
         } else {
             CoinCommand coinCommand = new CoinCommand(coinManager);
-
             coinsCommand.setExecutor(coinCommand);
             coinsCommand.setTabCompleter(coinCommand);
         }
@@ -139,93 +110,59 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             getLogger().warning("plugin.yml に stats コマンドが登録されていません。");
         } else {
             StatsCommand statsCommandExecutor = new StatsCommand(statsManager);
-
             statsCommand.setExecutor(statsCommandExecutor);
             statsCommand.setTabCompleter(statsCommandExecutor);
         }
     }
 
     private void startTasks() {
-        if (statsManager == null) {
-            return;
+        if (statsManager != null) {
+            statsManager.startActionBarTask();
         }
-
-        statsManager.startActionBarTask();
     }
 
     private void stopTasks() {
-        if (statsManager == null) {
-            return;
+        if (statsManager != null) {
+            statsManager.stopActionBarTask();
         }
-
-        statsManager.stopActionBarTask();
     }
 
     private void savePlayerDataOnShutdown() {
-        if (playerManager == null) {
-            return;
+        if (playerManager != null) {
+            playerManager.saveAllSynchronously();
         }
-
-        playerManager.saveAllSynchronously();
     }
 
     private void saveStatsDataOnShutdown() {
-        if (statsManager == null) {
-            return;
+        if (statsManager != null) {
+            statsManager.saveAllSynchronously();
         }
-
-        statsManager.saveAllSynchronously();
     }
 
     private void clearPlayerCache() {
-        if (playerManager == null) {
-            return;
+        if (playerManager != null) {
+            playerManager.clear();
         }
-
-        playerManager.clear();
     }
 
     private void clearStatsCache() {
-        if (statsManager == null) {
-            return;
+        if (statsManager != null) {
+            statsManager.clear();
         }
-
-        statsManager.clear();
     }
 
     private void closeDatabase() {
-        if (databaseManager == null) {
-            return;
+        if (databaseManager != null) {
+            databaseManager.close();
         }
-
-        databaseManager.close();
     }
 
-    public DatabaseManager getDatabaseManager() {
-        return databaseManager;
-    }
-
-    public PlayerRepository getPlayerRepository() {
-        return playerRepository;
-    }
-
-    public StatsRepository getStatsRepository() {
-        return statsRepository;
-    }
-
-    public PlayerManager getPlayerManager() {
-        return playerManager;
-    }
-
-    public CoinManager getCoinManager() {
-        return coinManager;
-    }
-
-    public StatsManager getStatsManager() {
-        return statsManager;
-    }
-
-    public FortuneManager getFortuneManager() {
-        return fortuneManager;
-    }
+    public DatabaseManager getDatabaseManager() { return databaseManager; }
+    public PlayerRepository getPlayerRepository() { return playerRepository; }
+    public StatsRepository getStatsRepository() { return statsRepository; }
+    public PlayerManager getPlayerManager() { return playerManager; }
+    public CoinManager getCoinManager() { return coinManager; }
+    public StatsManager getStatsManager() { return statsManager; }
+    public FortuneManager getFortuneManager() { return fortuneManager; }
+    public FortuneTargetSettings getFortuneTargetSettings() { return fortuneTargetSettings; }
 }
