@@ -1,6 +1,10 @@
 package me.lrg.skyblock.core.manager;
 
+import me.lrg.skyblock.core.model.BaseStatsType;
+import me.lrg.skyblock.core.model.CalculatedStats;
 import me.lrg.skyblock.core.model.StatsData;
+import me.lrg.skyblock.core.model.StatsLayer;
+import me.lrg.skyblock.core.model.StatsModifierData;
 import me.lrg.skyblock.core.model.StatsLoadState;
 import me.lrg.skyblock.core.model.StatsType;
 import me.lrg.skyblock.core.repository.RepositoryException;
@@ -18,10 +22,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,6 +58,7 @@ public class StatsManager {
     private final ConcurrentMap<UUID, StatsLoadState> loadStateMap = new ConcurrentHashMap<>();
 
     private final Set<UUID> savingUuids = ConcurrentHashMap.newKeySet();
+    private final StatsCalculationManager statsCalculationManager = new StatsCalculationManager();
 
     private BukkitTask actionBarTask;
     private BukkitTask autoSaveTask;
@@ -84,6 +88,7 @@ public class StatsManager {
 
         StatsData statsData = statsDataMap.get(uuid);
         loadStateMap.remove(uuid);
+        statsCalculationManager.clearPlayer(uuid);
 
         if (statsData == null) {
             return;
@@ -132,6 +137,7 @@ public class StatsManager {
     public Optional<StatsData> removeStatsData(UUID uuid) {
         Objects.requireNonNull(uuid, "uuid");
         loadStateMap.remove(uuid);
+        statsCalculationManager.clearPlayer(uuid);
         return Optional.ofNullable(statsDataMap.remove(uuid));
     }
 
@@ -197,6 +203,7 @@ public class StatsManager {
         statsDataMap.clear();
         loadStateMap.clear();
         savingUuids.clear();
+        statsCalculationManager.clear();
     }
 
     public void startActionBarTask() {
@@ -257,10 +264,10 @@ public class StatsManager {
             return false;
         }
 
-        StatsData statsData = statsDataOptional.get();
-        applyHealth(player, statsData);
-        applySpeed(player, statsData);
-        sendHealthManaActionBar(player, statsData);
+        CalculatedStats calculatedStats = statsCalculationManager.calculate(statsDataOptional.get());
+        applyHealth(player, calculatedStats);
+        applySpeed(player, calculatedStats);
+        sendHealthManaActionBar(player, calculatedStats);
         return true;
     }
 
@@ -272,12 +279,12 @@ public class StatsManager {
             return baseDamage;
         }
 
-        StatsData statsData = statsDataOptional.get();
-        double strength = Math.max(0.0, statsData.getStrength());
+        CalculatedStats calculatedStats = statsCalculationManager.calculate(statsDataOptional.get());
+        double strength = Math.max(0.0, calculatedStats.getStrength());
         double damage = baseDamage * (1.0 + (strength / 100.0));
 
-        if (rollCritical(statsData.getCriticalChance())) {
-            double critDamage = Math.max(0.0, statsData.getExtraStat(StatsType.CRIT_DAMAGE));
+        if (rollCritical(calculatedStats.getCriticalChance())) {
+            double critDamage = Math.max(0.0, calculatedStats.getExtraStat(StatsType.CRIT_DAMAGE));
             damage *= 1.0 + (critDamage / 100.0);
             attacker.sendMessage("§6✧ クリティカル！");
         }
@@ -289,8 +296,9 @@ public class StatsManager {
         Objects.requireNonNull(defender, "defender");
 
         return getStatsData(defender.getUniqueId())
-                .map(statsData -> {
-                    double defense = Math.max(0.0, statsData.getDefense());
+                .map(statsCalculationManager::calculate)
+                .map(calculatedStats -> {
+                    double defense = Math.max(0.0, calculatedStats.getDefense());
                     return incomingDamage * (100.0 / (100.0 + defense));
                 })
                 .orElse(incomingDamage);
@@ -299,7 +307,8 @@ public class StatsManager {
     public double getMagicFind(Player player) {
         Objects.requireNonNull(player, "player");
         return getStatsData(player.getUniqueId())
-                .map(StatsData::getMagicFind)
+                .map(statsCalculationManager::calculate)
+                .map(CalculatedStats::getMagicFind)
                 .orElse(0.0);
     }
 
@@ -308,8 +317,56 @@ public class StatsManager {
         Objects.requireNonNull(statsType, "statsType");
 
         return getStatsData(player.getUniqueId())
-                .map(statsData -> statsData.getExtraStat(statsType))
+                .map(statsCalculationManager::calculate)
+                .map(calculatedStats -> calculatedStats.getExtraStat(statsType))
                 .orElse(statsType.getDefaultValue());
+    }
+
+
+    public Optional<CalculatedStats> getCalculatedStats(UUID uuid) {
+        Objects.requireNonNull(uuid, "uuid");
+        return getStatsData(uuid).map(statsCalculationManager::calculate);
+    }
+
+    public void setLayerBaseStat(
+            UUID uuid,
+            StatsLayer layer,
+            BaseStatsType statsType,
+            double value
+    ) {
+        statsCalculationManager.setBaseStatModifier(uuid, layer, statsType, value);
+        applyStatsIfOnline(uuid);
+    }
+
+    public void setLayerExtraStat(
+            UUID uuid,
+            StatsLayer layer,
+            StatsType statsType,
+            double value
+    ) {
+        statsCalculationManager.setExtraStatModifier(uuid, layer, statsType, value);
+        applyStatsIfOnline(uuid);
+    }
+
+    public void replaceStatsLayer(UUID uuid, StatsLayer layer, StatsModifierData modifierData) {
+        statsCalculationManager.replaceLayer(uuid, layer, modifierData);
+        applyStatsIfOnline(uuid);
+    }
+
+    public void clearStatsLayer(UUID uuid, StatsLayer layer) {
+        statsCalculationManager.clearLayer(uuid, layer);
+        applyStatsIfOnline(uuid);
+    }
+
+    public StatsCalculationManager getStatsCalculationManager() {
+        return statsCalculationManager;
+    }
+
+    private void applyStatsIfOnline(UUID uuid) {
+        Player player = Bukkit.getPlayer(uuid);
+        if (player != null && player.isOnline()) {
+            applyStatsToPlayer(player);
+        }
     }
 
     private void loadStatsAsync(UUID uuid) {
@@ -397,7 +454,7 @@ public class StatsManager {
         );
     }
 
-    private void applyHealth(Player player, StatsData statsData) {
+    private void applyHealth(Player player, CalculatedStats statsData) {
         AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
         if (maxHealthAttribute == null) {
             logger.warning("GENERIC_MAX_HEALTH が取得できませんでした。player=" + player.getName());
@@ -413,7 +470,7 @@ public class StatsManager {
         }
     }
 
-    private void applySpeed(Player player, StatsData statsData) {
+    private void applySpeed(Player player, CalculatedStats statsData) {
         AttributeInstance movementSpeedAttribute = player.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
         if (movementSpeedAttribute == null) {
             logger.warning("GENERIC_MOVEMENT_SPEED が取得できませんでした。player=" + player.getName());
@@ -431,11 +488,12 @@ public class StatsManager {
     private void sendActionBarToOnlinePlayers() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             getStatsData(player.getUniqueId())
-                    .ifPresent(statsData -> sendHealthManaActionBar(player, statsData));
+                    .map(statsCalculationManager::calculate)
+                    .ifPresent(calculatedStats -> sendHealthManaActionBar(player, calculatedStats));
         }
     }
 
-    private void sendHealthManaActionBar(Player player, StatsData statsData) {
+    private void sendHealthManaActionBar(Player player, CalculatedStats statsData) {
         int displayedHealth = (int) Math.round(statsData.getHealth());
         int displayedMana = (int) Math.round(statsData.getMana());
 
