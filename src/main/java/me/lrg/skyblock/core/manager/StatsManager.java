@@ -20,6 +20,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -43,6 +45,7 @@ public class StatsManager {
 
     private static final long ACTION_BAR_INTERVAL_TICKS = 20L;
     private static final int SAVE_RETRY_COUNT = 2;
+    private static final long AUTO_SAVE_INTERVAL_TICKS = 20L * 60L * 5L;
 
     private final JavaPlugin plugin;
     private final StatsRepository statsRepository;
@@ -51,7 +54,10 @@ public class StatsManager {
     private final ConcurrentMap<UUID, StatsData> statsDataMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, StatsLoadState> loadStateMap = new ConcurrentHashMap<>();
 
+    private final Set<UUID> savingUuids = ConcurrentHashMap.newKeySet();
+
     private BukkitTask actionBarTask;
+    private BukkitTask autoSaveTask;
 
     public StatsManager(JavaPlugin plugin, StatsRepository statsRepository) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -85,6 +91,7 @@ public class StatsManager {
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             if (saveStatsWithRetry(statsData)) {
+                statsData.markClean();
                 statsDataMap.remove(uuid, statsData);
                 return;
             }
@@ -117,6 +124,7 @@ public class StatsManager {
 
     public void cacheStats(StatsData statsData) {
         Objects.requireNonNull(statsData, "statsData");
+        statsData.markClean();
         statsDataMap.put(statsData.getUuid(), statsData);
         loadStateMap.put(statsData.getUuid(), StatsLoadState.LOADED);
     }
@@ -133,13 +141,62 @@ public class StatsManager {
 
     public void saveAllSynchronously() {
         for (StatsData statsData : getCachedStats()) {
-            saveStatsWithRetry(statsData);
+            if (!statsData.isDirty()) {
+                continue;
+            }
+            if (saveStatsWithRetry(statsData)) {
+                statsData.markClean();
+            }
         }
+    }
+
+    public void saveDirtyStatsAsynchronously() {
+        for (StatsData statsData : getCachedStats()) {
+            if (!statsData.isDirty()) {
+                continue;
+            }
+
+            UUID uuid = statsData.getUuid();
+            if (!savingUuids.add(uuid)) {
+                continue;
+            }
+
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    if (saveStatsWithRetry(statsData)) {
+                        statsData.markClean();
+                    }
+                } finally {
+                    savingUuids.remove(uuid);
+                }
+            });
+        }
+    }
+
+    public int getCachedPlayerCount() {
+        return statsDataMap.size();
+    }
+
+    public int getDirtyPlayerCount() {
+        return (int) statsDataMap.values().stream().filter(StatsData::isDirty).count();
+    }
+
+    public int getLoadingPlayerCount() {
+        return (int) loadStateMap.values().stream().filter(state -> state == StatsLoadState.LOADING).count();
+    }
+
+    public int getFailedPlayerCount() {
+        return (int) loadStateMap.values().stream().filter(state -> state == StatsLoadState.FAILED).count();
+    }
+
+    public int getSavingPlayerCount() {
+        return savingUuids.size();
     }
 
     public void clear() {
         statsDataMap.clear();
         loadStateMap.clear();
+        savingUuids.clear();
     }
 
     public void startActionBarTask() {
@@ -155,6 +212,31 @@ public class StatsManager {
         );
 
         logger.info("[LRG] Stats ActionBar task started.");
+    }
+
+    public void startAutoSaveTask() {
+        if (autoSaveTask != null && !autoSaveTask.isCancelled()) {
+            return;
+        }
+
+        this.autoSaveTask = Bukkit.getScheduler().runTaskTimer(
+                plugin,
+                this::saveDirtyStatsAsynchronously,
+                AUTO_SAVE_INTERVAL_TICKS,
+                AUTO_SAVE_INTERVAL_TICKS
+        );
+
+        logger.info("[LRG] Stats auto-save task started.");
+    }
+
+    public void stopAutoSaveTask() {
+        if (autoSaveTask == null) {
+            return;
+        }
+
+        autoSaveTask.cancel();
+        autoSaveTask = null;
+        logger.info("[LRG] Stats auto-save task stopped.");
     }
 
     public void stopActionBarTask() {
