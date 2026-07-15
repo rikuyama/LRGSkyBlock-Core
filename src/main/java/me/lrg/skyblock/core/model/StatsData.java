@@ -5,14 +5,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * プレイヤーのステータスデータを保持するModel。
- *
- * 注意:
- * - SQLは書かない
- * - Bukkit APIは使わない
- * - ゲームロジックを詰め込みすぎない
- */
 public class StatsData {
 
     private final UUID uuid;
@@ -26,6 +18,7 @@ public class StatsData {
     private double magicFind;
 
     private final EnumMap<StatsType, Double> extraStats = new EnumMap<>(StatsType.class);
+    private volatile boolean dirty;
 
     public StatsData(
             UUID uuid,
@@ -49,66 +42,66 @@ public class StatsData {
         for (StatsType statsType : StatsType.values()) {
             extraStats.put(statsType, statsType.getDefaultValue());
         }
+
+        this.dirty = false;
     }
 
-    public UUID getUuid() {
-        return uuid;
-    }
-
-    public double getHealth() {
-        return health;
-    }
+    public UUID getUuid() { return uuid; }
+    public double getHealth() { return health; }
+    public double getMana() { return mana; }
+    public double getStrength() { return strength; }
+    public double getDefense() { return defense; }
+    public double getSpeed() { return speed; }
+    public double getCriticalChance() { return criticalChance; }
+    public double getMagicFind() { return magicFind; }
 
     public void setHealth(double health) {
-        this.health = health;
-    }
-
-    public double getMana() {
-        return mana;
+        if (Double.compare(this.health, health) != 0) {
+            this.health = health;
+            markDirty();
+        }
     }
 
     public void setMana(double mana) {
-        this.mana = mana;
-    }
-
-    public double getStrength() {
-        return strength;
+        if (Double.compare(this.mana, mana) != 0) {
+            this.mana = mana;
+            markDirty();
+        }
     }
 
     public void setStrength(double strength) {
-        this.strength = strength;
-    }
-
-    public double getDefense() {
-        return defense;
+        if (Double.compare(this.strength, strength) != 0) {
+            this.strength = strength;
+            markDirty();
+        }
     }
 
     public void setDefense(double defense) {
-        this.defense = defense;
-    }
-
-    public double getSpeed() {
-        return speed;
+        if (Double.compare(this.defense, defense) != 0) {
+            this.defense = defense;
+            markDirty();
+        }
     }
 
     public void setSpeed(double speed) {
-        this.speed = speed;
-    }
-
-    public double getCriticalChance() {
-        return criticalChance;
+        if (Double.compare(this.speed, speed) != 0) {
+            this.speed = speed;
+            markDirty();
+        }
     }
 
     public void setCriticalChance(double criticalChance) {
-        this.criticalChance = criticalChance;
-    }
-
-    public double getMagicFind() {
-        return magicFind;
+        if (Double.compare(this.criticalChance, criticalChance) != 0) {
+            this.criticalChance = criticalChance;
+            markDirty();
+        }
     }
 
     public void setMagicFind(double magicFind) {
-        this.magicFind = magicFind;
+        if (Double.compare(this.magicFind, magicFind) != 0) {
+            this.magicFind = magicFind;
+            markDirty();
+        }
     }
 
     public double getExtraStat(StatsType statsType) {
@@ -118,10 +111,26 @@ public class StatsData {
 
     public void setExtraStat(StatsType statsType, double value) {
         Objects.requireNonNull(statsType, "statsType");
-        extraStats.put(statsType, value);
+        double currentValue = getExtraStat(statsType);
+        if (Double.compare(currentValue, value) != 0) {
+            extraStats.put(statsType, value);
+            markDirty();
+        }
     }
 
     public Map<StatsType, Double> getExtraStats() {
         return Map.copyOf(extraStats);
+    }
+
+    public boolean isDirty() {
+        return dirty;
+    }
+
+    public void markDirty() {
+        this.dirty = true;
+    }
+
+    public void markClean() {
+        this.dirty = false;
     }
 }
