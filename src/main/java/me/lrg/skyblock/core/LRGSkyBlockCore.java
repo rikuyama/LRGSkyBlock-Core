@@ -5,6 +5,7 @@ import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.config.FortuneTargetSettings;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
+import me.lrg.skyblock.core.database.StatsSchemaMigrator;
 import me.lrg.skyblock.core.listener.FarmingFortuneListener;
 import me.lrg.skyblock.core.listener.ForagingFortuneListener;
 import me.lrg.skyblock.core.listener.MiningFortuneListener;
@@ -39,6 +40,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
         try {
             setupDatabase();
+            migrateDatabaseSchema();
             setupConfigs();
             setupRepositories();
             setupManagers();
@@ -66,6 +68,11 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
     private void setupDatabase() {
         this.databaseManager = new DatabaseManager(this);
+    }
+
+    private void migrateDatabaseSchema() {
+        StatsSchemaMigrator statsSchemaMigrator = new StatsSchemaMigrator(databaseManager, getLogger());
+        statsSchemaMigrator.migrate();
     }
 
     private void setupConfigs() {
