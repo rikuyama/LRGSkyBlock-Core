@@ -1,6 +1,7 @@
 package me.lrg.skyblock.core.command;
 
 import me.lrg.skyblock.core.manager.StatsManager;
+import me.lrg.skyblock.core.model.CalculatedStats;
 import me.lrg.skyblock.core.model.StatsCategory;
 import me.lrg.skyblock.core.model.StatsData;
 import me.lrg.skyblock.core.model.StatsType;
@@ -153,14 +154,14 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
     }
 
     private void showBaseStats(CommandSender sender, Player target) {
-        Optional<StatsData> statsDataOptional = statsManager.getStatsData(target.getUniqueId());
+        Optional<CalculatedStats> statsDataOptional = statsManager.getCalculatedStats(target.getUniqueId());
 
         if (statsDataOptional.isEmpty()) {
             sender.sendMessage("§c対象プレイヤーのStatsDataがまだ読み込まれていません。");
             return;
         }
 
-        StatsData statsData = statsDataOptional.get();
+        CalculatedStats statsData = statsDataOptional.get();
 
         sender.sendMessage("§6==== §e" + target.getName() + " の基本ステータス §6====");
         sendBaseStats(sender, statsData);
@@ -169,14 +170,14 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
     }
 
     private void showAllStats(CommandSender sender, Player target) {
-        Optional<StatsData> statsDataOptional = statsManager.getStatsData(target.getUniqueId());
+        Optional<CalculatedStats> statsDataOptional = statsManager.getCalculatedStats(target.getUniqueId());
 
         if (statsDataOptional.isEmpty()) {
             sender.sendMessage("§c対象プレイヤーのStatsDataがまだ読み込まれていません。");
             return;
         }
 
-        StatsData statsData = statsDataOptional.get();
+        CalculatedStats statsData = statsDataOptional.get();
 
         sender.sendMessage("§6==== §e" + target.getName() + " の全ステータス §6====");
         sender.sendMessage("§e[基本ステータス]");
@@ -191,14 +192,14 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
     }
 
     private void showCategoryStats(CommandSender sender, Player target, StatsCategory category) {
-        Optional<StatsData> statsDataOptional = statsManager.getStatsData(target.getUniqueId());
+        Optional<CalculatedStats> statsDataOptional = statsManager.getCalculatedStats(target.getUniqueId());
 
         if (statsDataOptional.isEmpty()) {
             sender.sendMessage("§c対象プレイヤーのStatsDataがまだ読み込まれていません。");
             return;
         }
 
-        StatsData statsData = statsDataOptional.get();
+        CalculatedStats statsData = statsDataOptional.get();
 
         sender.sendMessage("§6==== §e" + target.getName() + " の " + category.getDisplayName() + " §6====");
 
@@ -220,7 +221,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§7※ 未実装のStatsは現在、保存・表示のみです。");
     }
 
-    private void sendBaseStats(CommandSender sender, StatsData statsData) {
+    private void sendBaseStats(CommandSender sender, CalculatedStats statsData) {
         sender.sendMessage(formatBaseStatLine("ヘルス", statsData.getHealth(), true));
         sender.sendMessage(formatBaseStatLine("マナ", statsData.getMana(), true));
         sender.sendMessage(formatBaseStatLine("ストレングス", statsData.getStrength(), true));
@@ -233,7 +234,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
     private void sendCategoryLines(
             CommandSender sender,
             Player target,
-            StatsData statsData,
+            CalculatedStats statsData,
             StatsCategory category
     ) {
         boolean hasAny = false;
@@ -258,7 +259,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void sendMiningFortuneLine(CommandSender sender, Player target, StatsData statsData) {
+    private void sendMiningFortuneLine(CommandSender sender, Player target, CalculatedStats statsData) {
         double baseValue = statsData.getExtraStat(StatsType.MINING_FORTUNE);
         ItemStack tool = target.getInventory().getItemInMainHand();
         double enchantBonus = FortuneToolUtil.getMiningFortuneFromEnchant(tool);
