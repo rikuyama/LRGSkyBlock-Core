@@ -2,6 +2,7 @@ package me.lrg.skyblock.core;
 
 import me.lrg.skyblock.core.command.CoinCommand;
 import me.lrg.skyblock.core.command.StatsCommand;
+import me.lrg.skyblock.core.command.StatsCacheCommand;
 import me.lrg.skyblock.core.config.FortuneTargetSettings;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
@@ -120,16 +121,26 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             statsCommand.setExecutor(statsCommandExecutor);
             statsCommand.setTabCompleter(statsCommandExecutor);
         }
+
+        PluginCommand statsCacheCommand = getCommand("statscache");
+
+        if (statsCacheCommand == null) {
+            getLogger().warning("plugin.yml に statscache コマンドが登録されていません。");
+        } else {
+            statsCacheCommand.setExecutor(new StatsCacheCommand(statsManager));
+        }
     }
 
     private void startTasks() {
         if (statsManager != null) {
             statsManager.startActionBarTask();
+            statsManager.startAutoSaveTask();
         }
     }
 
     private void stopTasks() {
         if (statsManager != null) {
+            statsManager.stopAutoSaveTask();
             statsManager.stopActionBarTask();
         }
     }
