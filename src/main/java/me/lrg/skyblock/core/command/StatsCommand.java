@@ -4,12 +4,14 @@ import me.lrg.skyblock.core.manager.StatsManager;
 import me.lrg.skyblock.core.model.StatsCategory;
 import me.lrg.skyblock.core.model.StatsData;
 import me.lrg.skyblock.core.model.StatsType;
+import me.lrg.skyblock.core.util.FortuneToolUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,20 +21,6 @@ import java.util.Optional;
 
 /**
  * Stats確認・管理用コマンド。
- *
- * 使用例:
- * /stats
- * /stats all
- * /stats combat
- * /stats mining
- * /stats farming
- * /stats foraging
- * /stats fishing
- * /stats wisdom
- * /stats luck
- * /stats <player>
- * /stats <player> <category>
- * /stats set <player> <stat> <value>
  */
 public class StatsCommand implements CommandExecutor, TabCompleter {
 
@@ -176,7 +164,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
 
         sender.sendMessage("§6==== §e" + target.getName() + " の基本ステータス §6====");
         sendBaseStats(sender, statsData);
-        sender.sendMessage("§7他カテゴリ: /stats combat, /stats mining, /stats farming, /stats fishing");
+        sender.sendMessage("§7他カテゴリ: /stats combat, /stats mining, /stats farming, /stats foraging, /stats fishing");
         sender.sendMessage("§7全表示: /stats all");
     }
 
@@ -191,13 +179,12 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         StatsData statsData = statsDataOptional.get();
 
         sender.sendMessage("§6==== §e" + target.getName() + " の全ステータス §6====");
-
         sender.sendMessage("§e[基本ステータス]");
         sendBaseStats(sender, statsData);
 
         for (StatsCategory category : StatsCategory.values()) {
             sender.sendMessage("§e[" + category.getDisplayName() + "]");
-            sendCategoryLines(sender, statsData, category);
+            sendCategoryLines(sender, target, statsData, category);
         }
 
         sender.sendMessage("§7※ 未実装のStatsは現在、保存・表示のみです。");
@@ -229,7 +216,7 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(formatBaseStatLine("マジックファインド", statsData.getMagicFind(), false));
         }
 
-        sendCategoryLines(sender, statsData, category);
+        sendCategoryLines(sender, target, statsData, category);
         sender.sendMessage("§7※ 未実装のStatsは現在、保存・表示のみです。");
     }
 
@@ -243,7 +230,12 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(formatBaseStatLine("マジックファインド", statsData.getMagicFind(), false));
     }
 
-    private void sendCategoryLines(CommandSender sender, StatsData statsData, StatsCategory category) {
+    private void sendCategoryLines(
+            CommandSender sender,
+            Player target,
+            StatsData statsData,
+            StatsCategory category
+    ) {
         boolean hasAny = false;
 
         for (StatsType statsType : StatsType.values()) {
@@ -252,6 +244,12 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
             }
 
             hasAny = true;
+
+            if (statsType == StatsType.MINING_FORTUNE) {
+                sendMiningFortuneLine(sender, target, statsData);
+                continue;
+            }
+
             sender.sendMessage(formatExtraStatLine(statsType, statsData.getExtraStat(statsType)));
         }
 
@@ -260,15 +258,42 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private void sendMiningFortuneLine(CommandSender sender, Player target, StatsData statsData) {
+        double baseValue = statsData.getExtraStat(StatsType.MINING_FORTUNE);
+        ItemStack tool = target.getInventory().getItemInMainHand();
+        double enchantBonus = FortuneToolUtil.getMiningFortuneFromEnchant(tool);
+        double finalValue = baseValue + enchantBonus;
+
+        sender.sendMessage(formatExtraStatLine(StatsType.MINING_FORTUNE, finalValue));
+
+        if (enchantBonus <= 0.0) {
+            return;
+        }
+
+        int enchantLevel = FortuneToolUtil.getVanillaFortuneLevel(tool);
+
+        sender.sendMessage("§8  基本値: §7" + format(baseValue));
+        sender.sendMessage(
+                "§8  装備中の幸運 "
+                        + toRomanNumeral(enchantLevel)
+                        + ": §a+"
+                        + format(enchantBonus)
+        );
+    }
+
     private String formatBaseStatLine(String displayName, double value, boolean implemented) {
         String status = implemented ? "§a実装済み" : "§7未実装";
         return "§7" + displayName + ": §f" + format(value) + " §8[" + status + "§8]";
     }
 
     private String formatExtraStatLine(StatsType statsType, double value) {
-        return "§7" + statsType.getDisplayName()
-                + ": §f" + format(value)
-                + " §8[" + statsType.getImplementationStatusText() + "§8]";
+        return "§7"
+                + statsType.getDisplayName()
+                + ": §f"
+                + format(value)
+                + " §8["
+                + statsType.getImplementationStatusText()
+                + "§8]";
     }
 
     private void setStats(CommandSender sender, String[] args) {
@@ -291,7 +316,6 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         }
 
         String statName = args[2].toLowerCase();
-
         Double value = parseValue(sender, args[3]);
 
         if (value == null) {
@@ -308,7 +332,16 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
 
         statsManager.applyStatsToPlayer(target);
 
-        sender.sendMessage("§a" + target.getName() + " の " + getDisplayName(statName) + " を " + format(value) + " に設定しました。");
+        sender.sendMessage(
+                "§a"
+                        + target.getName()
+                        + " の "
+                        + getDisplayName(statName)
+                        + " を "
+                        + format(value)
+                        + " に設定しました。"
+        );
+
         showBaseStats(sender, target);
     }
 
@@ -382,6 +415,22 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         return String.format("%.2f", value);
     }
 
+    private String toRomanNumeral(int level) {
+        return switch (level) {
+            case 1 -> "I";
+            case 2 -> "II";
+            case 3 -> "III";
+            case 4 -> "IV";
+            case 5 -> "V";
+            case 6 -> "VI";
+            case 7 -> "VII";
+            case 8 -> "VIII";
+            case 9 -> "IX";
+            case 10 -> "X";
+            default -> String.valueOf(level);
+        };
+    }
+
     private boolean isDisplayMode(String input) {
         return DISPLAY_MODES.stream()
                 .anyMatch(mode -> mode.equalsIgnoreCase(input));
@@ -395,16 +444,12 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§7/stats <プレイヤー名> §f- 指定プレイヤーの基本ステータスを確認");
         sender.sendMessage("§7/stats <プレイヤー名> <カテゴリ> §f- 指定プレイヤーのカテゴリ別Statsを確認");
         sender.sendMessage("§7/stats set <プレイヤー名> <stat> <value> §f- ステータスを変更");
-
         sender.sendMessage("§eカテゴリ:");
         sender.sendMessage("§7all, combat, mining, farming, foraging, fishing, wisdom, luck");
-
         sender.sendMessage("§e基本Stats:");
         sender.sendMessage("§7health=ヘルス, mana=マナ, strength=ストレングス, defense=ディフェンス, speed=スピード, critical_chance=クリティカル率, magic_find=マジックファインド");
-
         sender.sendMessage("§e追加Stats:");
         sender.sendMessage("§7" + String.join(", ", getExtraStatKeys()));
-
         sender.sendMessage("§7※ 実装済みStatsはゲーム内効果があります。");
         sender.sendMessage("§7※ 未実装Statsは現在、保存・表示のみです。");
     }
@@ -422,7 +467,6 @@ public class StatsCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1) {
             List<String> completions = new ArrayList<>();
-
             completions.add("help");
             completions.addAll(DISPLAY_MODES);
 
