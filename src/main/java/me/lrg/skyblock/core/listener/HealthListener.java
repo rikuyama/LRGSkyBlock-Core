@@ -24,22 +24,50 @@ public final class HealthListener implements Listener {
         this.statsManager = Objects.requireNonNull(statsManager, "statsManager");
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
 
-        syncNextTick(player);
+        double internalDamage = Math.max(0.0, event.getFinalDamage());
+        if (internalDamage <= 0.0) {
+            return;
+        }
+
+        double visualScale = statsManager.getVisualHealthScale(player);
+        event.setDamage(Math.max(0.0, event.getDamage() * visualScale));
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline() || player.isDead()) {
+                return;
+            }
+
+            statsManager.damage(player, internalDamage);
+        });
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onRegainHealth(EntityRegainHealthEvent event) {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
 
-        syncNextTick(player);
+        double internalHealing = Math.max(0.0, event.getAmount());
+        if (internalHealing <= 0.0) {
+            return;
+        }
+
+        double visualScale = statsManager.getVisualHealthScale(player);
+        event.setAmount(Math.max(0.0, internalHealing * visualScale));
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline() || player.isDead()) {
+                return;
+            }
+
+            statsManager.heal(player, internalHealing);
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -57,16 +85,6 @@ public final class HealthListener implements Listener {
 
             statsManager.resetCurrentHealth(player);
             statsManager.applyStatsToPlayer(player);
-        });
-    }
-
-    private void syncNextTick(Player player) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline()) {
-                return;
-            }
-
-            statsManager.syncCurrentHealthFromBukkit(player);
         });
     }
 }

@@ -8,3 +8,9 @@ DIAMOND_ORE:
   fortune-drop-materials:
     - DIAMOND
   custom-drop-id: ""
+
+COAL_ORE:
+  category: ORE
+  base-drop-amount: 1
+  fortune-enabled: true
+  silk-touch-enabled: true
