@@ -42,6 +42,9 @@ public class StatsManager {
     private static final double DEFAULT_MAGIC_FIND = 0.0;
 
     private static final double MIN_HEALTH = 1.0;
+    private static final double MIN_MANA = 0.0;
+    private static final double MAX_MANA = 1000000.0;
+    private static final double MANA_REGEN_PERCENT_PER_TICK = 0.02;
     private static final double MAX_HEALTH = 10000.0;
     private static final double MAX_VISUAL_HEALTH = 40.0;
     private static final double SPEED_TO_MOVEMENT_SPEED_RATE = 0.001;
@@ -49,6 +52,7 @@ public class StatsManager {
     private static final double MAX_MOVEMENT_SPEED = 1.0;
 
     private static final long ACTION_BAR_INTERVAL_TICKS = 20L;
+    private static final long MANA_REGEN_INTERVAL_TICKS = 20L;
     private static final int SAVE_RETRY_COUNT = 2;
     private static final long AUTO_SAVE_INTERVAL_TICKS = 20L * 60L * 5L;
 
@@ -59,12 +63,15 @@ public class StatsManager {
     private final ConcurrentMap<UUID, StatsData> statsDataMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, StatsLoadState> loadStateMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Double> currentHealthMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, Double> currentManaMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, Double> appliedMaxManaMap = new ConcurrentHashMap<>();
 
     private final Set<UUID> savingUuids = ConcurrentHashMap.newKeySet();
     private final StatsCalculationManager statsCalculationManager = new StatsCalculationManager();
 
     private BukkitTask actionBarTask;
     private BukkitTask autoSaveTask;
+    private BukkitTask manaRegenTask;
 
     public StatsManager(JavaPlugin plugin, StatsRepository statsRepository) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -92,6 +99,8 @@ public class StatsManager {
         StatsData statsData = statsDataMap.get(uuid);
         loadStateMap.remove(uuid);
         currentHealthMap.remove(uuid);
+        currentManaMap.remove(uuid);
+        appliedMaxManaMap.remove(uuid);
         statsCalculationManager.clearPlayer(uuid);
 
         if (statsData == null) {
@@ -142,6 +151,8 @@ public class StatsManager {
         Objects.requireNonNull(uuid, "uuid");
         loadStateMap.remove(uuid);
         currentHealthMap.remove(uuid);
+        currentManaMap.remove(uuid);
+        appliedMaxManaMap.remove(uuid);
         statsCalculationManager.clearPlayer(uuid);
         return Optional.ofNullable(statsDataMap.remove(uuid));
     }
@@ -209,6 +220,8 @@ public class StatsManager {
         loadStateMap.clear();
         savingUuids.clear();
         currentHealthMap.clear();
+        currentManaMap.clear();
+        appliedMaxManaMap.clear();
         statsCalculationManager.clear();
     }
 
@@ -225,6 +238,31 @@ public class StatsManager {
         );
 
         logger.info("[LRG] Stats ActionBar task started.");
+    }
+
+    public void startManaRegenTask() {
+        if (manaRegenTask != null && !manaRegenTask.isCancelled()) {
+            return;
+        }
+
+        this.manaRegenTask = Bukkit.getScheduler().runTaskTimer(
+                plugin,
+                this::regenerateManaForOnlinePlayers,
+                MANA_REGEN_INTERVAL_TICKS,
+                MANA_REGEN_INTERVAL_TICKS
+        );
+
+        logger.info("[LRG] Mana regeneration task started.");
+    }
+
+    public void stopManaRegenTask() {
+        if (manaRegenTask == null) {
+            return;
+        }
+
+        manaRegenTask.cancel();
+        manaRegenTask = null;
+        logger.info("[LRG] Mana regeneration task stopped.");
     }
 
     public void startAutoSaveTask() {
@@ -272,6 +310,7 @@ public class StatsManager {
 
         CalculatedStats calculatedStats = statsCalculationManager.calculate(statsDataOptional.get());
         applyHealth(player, calculatedStats);
+        applyMana(player, calculatedStats);
         applySpeed(player, calculatedStats);
         sendHealthManaActionBar(player, calculatedStats);
         return true;
@@ -524,6 +563,77 @@ public class StatsManager {
         );
     }
 
+
+    public double getMaxMana(Player player) {
+        Objects.requireNonNull(player, "player");
+        return getCalculatedStats(player.getUniqueId())
+                .map(CalculatedStats::getMana)
+                .map(value -> clamp(value, MIN_MANA, MAX_MANA))
+                .orElse(DEFAULT_MANA);
+    }
+
+    public double getCurrentMana(Player player) {
+        Objects.requireNonNull(player, "player");
+        double maxMana = getMaxMana(player);
+        return clamp(currentManaMap.getOrDefault(player.getUniqueId(), maxMana), MIN_MANA, maxMana);
+    }
+
+    public void setCurrentMana(Player player, double currentMana) {
+        Objects.requireNonNull(player, "player");
+        if (!Double.isFinite(currentMana)) {
+            return;
+        }
+
+        double maxMana = getMaxMana(player);
+        currentManaMap.put(player.getUniqueId(), clamp(currentMana, MIN_MANA, maxMana));
+    }
+
+    public boolean hasEnoughMana(Player player, double amount) {
+        Objects.requireNonNull(player, "player");
+        return Double.isFinite(amount) && amount >= 0.0 && getCurrentMana(player) >= amount;
+    }
+
+    public boolean consumeMana(Player player, double amount) {
+        Objects.requireNonNull(player, "player");
+        if (!Double.isFinite(amount) || amount < 0.0) {
+            return false;
+        }
+
+        if (!hasEnoughMana(player, amount)) {
+            return false;
+        }
+
+        setCurrentMana(player, getCurrentMana(player) - amount);
+        return true;
+    }
+
+    public void restoreMana(Player player, double amount) {
+        Objects.requireNonNull(player, "player");
+        if (!Double.isFinite(amount) || amount <= 0.0) {
+            return;
+        }
+
+        setCurrentMana(player, getCurrentMana(player) + amount);
+    }
+
+    public void resetCurrentMana(Player player) {
+        Objects.requireNonNull(player, "player");
+        double maxMana = getMaxMana(player);
+        currentManaMap.put(player.getUniqueId(), maxMana);
+        appliedMaxManaMap.put(player.getUniqueId(), maxMana);
+    }
+
+    public void clearCurrentMana(Player player) {
+        Objects.requireNonNull(player, "player");
+        currentManaMap.put(player.getUniqueId(), MIN_MANA);
+    }
+
+    public void removeCurrentMana(UUID uuid) {
+        Objects.requireNonNull(uuid, "uuid");
+        currentManaMap.remove(uuid);
+        appliedMaxManaMap.remove(uuid);
+    }
+
     public double getMaxHealth(Player player) {
         Objects.requireNonNull(player, "player");
         return getCalculatedStats(player.getUniqueId())
@@ -638,6 +748,39 @@ public class StatsManager {
         player.setHealth(clamp(visualCurrentHealth, 0.0, visualMaxHealth));
     }
 
+    private void applyMana(Player player, CalculatedStats statsData) {
+        UUID uuid = player.getUniqueId();
+        double newMaxMana = clamp(statsData.getMana(), MIN_MANA, MAX_MANA);
+        double oldMaxMana = appliedMaxManaMap.getOrDefault(uuid, newMaxMana);
+        double oldCurrentMana = currentManaMap.getOrDefault(uuid, newMaxMana);
+
+        double currentRatio = oldMaxMana <= 0.0
+                ? 1.0
+                : clamp(oldCurrentMana / oldMaxMana, 0.0, 1.0);
+
+        double newCurrentMana = clamp(newMaxMana * currentRatio, MIN_MANA, newMaxMana);
+        appliedMaxManaMap.put(uuid, newMaxMana);
+        currentManaMap.put(uuid, newCurrentMana);
+    }
+
+    private void regenerateManaForOnlinePlayers() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!isStatsLoaded(player.getUniqueId()) || player.isDead()) {
+                continue;
+            }
+
+            double maxMana = getMaxMana(player);
+            double currentMana = getCurrentMana(player);
+
+            if (currentMana >= maxMana) {
+                continue;
+            }
+
+            double regenerationAmount = Math.max(1.0, maxMana * MANA_REGEN_PERCENT_PER_TICK);
+            restoreMana(player, regenerationAmount);
+        }
+    }
+
     private void applySpeed(Player player, CalculatedStats statsData) {
         AttributeInstance movementSpeedAttribute = player.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
         if (movementSpeedAttribute == null) {
@@ -664,11 +807,12 @@ public class StatsManager {
     private void sendHealthManaActionBar(Player player, CalculatedStats statsData) {
         int displayedCurrentHealth = (int) Math.ceil(getCurrentHealth(player));
         int displayedMaxHealth = (int) Math.round(clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH));
-        int displayedMana = (int) Math.round(statsData.getMana());
+        int displayedCurrentMana = (int) Math.floor(getCurrentMana(player));
+        int displayedMaxMana = (int) Math.round(clamp(statsData.getMana(), MIN_MANA, MAX_MANA));
 
         player.sendActionBar(Component.text(
                 "§c❤ " + displayedCurrentHealth + "/" + displayedMaxHealth
-                        + " §8| §b✎ " + displayedMana
+                        + " §8| §b✎ " + displayedCurrentMana + "/" + displayedMaxMana
         ));
     }
 
