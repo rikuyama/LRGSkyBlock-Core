@@ -10,6 +10,7 @@ import me.lrg.skyblock.core.database.DatabaseManager;
 import me.lrg.skyblock.core.database.StatsSchemaMigrator;
 import me.lrg.skyblock.core.listener.FarmingFortuneListener;
 import me.lrg.skyblock.core.listener.ForagingFortuneListener;
+import me.lrg.skyblock.core.listener.HealthListener;
 import me.lrg.skyblock.core.listener.MiningFortuneListener;
 import me.lrg.skyblock.core.listener.PlayerCombatListener;
 import me.lrg.skyblock.core.listener.PlayerListener;
@@ -97,6 +98,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(new PlayerListener(playerManager, statsManager), this);
         getServer().getPluginManager().registerEvents(new PlayerCombatListener(statsManager), this);
+        getServer().getPluginManager().registerEvents(new HealthListener(this, statsManager), this);
         getServer().getPluginManager().registerEvents(new FarmingFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new MiningFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager), this);
