@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.4.27
+version: 0.4.28
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "1.20"
 author: LRG
@@ -20,6 +20,12 @@ commands:
     aliases:
       - stat
 
+  actionbar:
+    description: Health・ManaのActionBar表示を切り替えるコマンド
+    usage: /actionbar <on|off|toggle|status>
+    aliases:
+      - ab
+
   statscache:
     description: Statsキャッシュ状態を確認するコマンド
     usage: /statscache [save]
@@ -39,6 +45,10 @@ permissions:
 
   lrgskyblock.command.stats:
     description: ステータス確認コマンドの使用権限
+    default: true
+
+  lrgskyblock.command.actionbar:
+    description: ActionBar表示設定コマンドの使用権限
     default: true
 
   lrgskyblock.command.stats.admin:
