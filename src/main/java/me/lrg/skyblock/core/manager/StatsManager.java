@@ -58,6 +58,7 @@ public class StatsManager {
 
     private final ConcurrentMap<UUID, StatsData> statsDataMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, StatsLoadState> loadStateMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, Double> currentHealthMap = new ConcurrentHashMap<>();
 
     private final Set<UUID> savingUuids = ConcurrentHashMap.newKeySet();
     private final StatsCalculationManager statsCalculationManager = new StatsCalculationManager();
@@ -90,6 +91,7 @@ public class StatsManager {
 
         StatsData statsData = statsDataMap.get(uuid);
         loadStateMap.remove(uuid);
+        currentHealthMap.remove(uuid);
         statsCalculationManager.clearPlayer(uuid);
 
         if (statsData == null) {
@@ -139,6 +141,7 @@ public class StatsManager {
     public Optional<StatsData> removeStatsData(UUID uuid) {
         Objects.requireNonNull(uuid, "uuid");
         loadStateMap.remove(uuid);
+        currentHealthMap.remove(uuid);
         statsCalculationManager.clearPlayer(uuid);
         return Optional.ofNullable(statsDataMap.remove(uuid));
     }
@@ -205,6 +208,7 @@ public class StatsManager {
         statsDataMap.clear();
         loadStateMap.clear();
         savingUuids.clear();
+        currentHealthMap.clear();
         statsCalculationManager.clear();
     }
 
@@ -520,20 +524,118 @@ public class StatsManager {
         );
     }
 
+    public double getMaxHealth(Player player) {
+        Objects.requireNonNull(player, "player");
+        return getCalculatedStats(player.getUniqueId())
+                .map(CalculatedStats::getHealth)
+                .map(value -> clamp(value, MIN_HEALTH, MAX_HEALTH))
+                .orElse(DEFAULT_HEALTH);
+    }
+
+    public double getCurrentHealth(Player player) {
+        Objects.requireNonNull(player, "player");
+
+        double maxHealth = getMaxHealth(player);
+        return clamp(
+                currentHealthMap.getOrDefault(player.getUniqueId(), maxHealth),
+                0.0,
+                maxHealth
+        );
+    }
+
+    public void setCurrentHealth(Player player, double currentHealth) {
+        Objects.requireNonNull(player, "player");
+
+        double maxHealth = getMaxHealth(player);
+        double safeCurrentHealth = clamp(currentHealth, 0.0, maxHealth);
+        currentHealthMap.put(player.getUniqueId(), safeCurrentHealth);
+        applyVisualHealth(player, safeCurrentHealth, maxHealth);
+    }
+
+    public void heal(Player player, double amount) {
+        Objects.requireNonNull(player, "player");
+        if (!Double.isFinite(amount) || amount <= 0.0) {
+            return;
+        }
+        setCurrentHealth(player, getCurrentHealth(player) + amount);
+    }
+
+    public void resetCurrentHealth(Player player) {
+        Objects.requireNonNull(player, "player");
+        setCurrentHealth(player, getMaxHealth(player));
+    }
+
+    public void markDead(Player player) {
+        Objects.requireNonNull(player, "player");
+        currentHealthMap.put(player.getUniqueId(), 0.0);
+    }
+
+    public void syncCurrentHealthFromBukkit(Player player) {
+        Objects.requireNonNull(player, "player");
+        if (!player.isOnline() || player.isDead()) {
+            return;
+        }
+
+        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        if (maxHealthAttribute == null) {
+            return;
+        }
+
+        double visualMaxHealth = Math.max(MIN_HEALTH, maxHealthAttribute.getValue());
+        double visualCurrentHealth = clamp(player.getHealth(), 0.0, visualMaxHealth);
+        double maxHealth = getMaxHealth(player);
+        double currentHealth = maxHealth * (visualCurrentHealth / visualMaxHealth);
+        currentHealthMap.put(player.getUniqueId(), clamp(currentHealth, 0.0, maxHealth));
+    }
+
     private void applyHealth(Player player, CalculatedStats statsData) {
+        double newMaxHealth = clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH);
+        double oldMaxHealth = getPreviouslyAppliedMaxHealth(player);
+        double oldCurrentHealth = currentHealthMap.getOrDefault(player.getUniqueId(), newMaxHealth);
+
+        double currentRatio = oldMaxHealth <= 0.0
+                ? 1.0
+                : clamp(oldCurrentHealth / oldMaxHealth, 0.0, 1.0);
+
+        double newCurrentHealth = clamp(newMaxHealth * currentRatio, 0.0, newMaxHealth);
+        currentHealthMap.put(player.getUniqueId(), newCurrentHealth);
+        applyVisualHealth(player, newCurrentHealth, newMaxHealth);
+    }
+
+    private double getPreviouslyAppliedMaxHealth(Player player) {
+        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        if (maxHealthAttribute == null) {
+            return getMaxHealth(player);
+        }
+
+        double visualMaxHealth = Math.max(MIN_HEALTH, maxHealthAttribute.getValue());
+        double currentMaxHealth = getMaxHealth(player);
+
+        if (currentMaxHealth <= MAX_VISUAL_HEALTH) {
+            return visualMaxHealth;
+        }
+
+        return currentMaxHealth;
+    }
+
+    private void applyVisualHealth(Player player, double currentHealth, double maxHealth) {
         AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
         if (maxHealthAttribute == null) {
             logger.warning("GENERIC_MAX_HEALTH が取得できませんでした。player=" + player.getName());
             return;
         }
 
-        double statsMaxHealth = clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH);
-        double visualMaxHealth = Math.min(statsMaxHealth, MAX_VISUAL_HEALTH);
+        double visualMaxHealth = Math.min(maxHealth, MAX_VISUAL_HEALTH);
         maxHealthAttribute.setBaseValue(visualMaxHealth);
 
-        if (player.getHealth() > visualMaxHealth) {
-            player.setHealth(visualMaxHealth);
+        double ratio = maxHealth <= 0.0 ? 0.0 : clamp(currentHealth / maxHealth, 0.0, 1.0);
+        double visualCurrentHealth = visualMaxHealth * ratio;
+
+        if (visualCurrentHealth <= 0.0 && !player.isDead()) {
+            visualCurrentHealth = Math.min(0.5, visualMaxHealth);
         }
+
+        player.setHealth(clamp(visualCurrentHealth, 0.0, visualMaxHealth));
     }
 
     private void applySpeed(Player player, CalculatedStats statsData) {
@@ -560,11 +662,13 @@ public class StatsManager {
     }
 
     private void sendHealthManaActionBar(Player player, CalculatedStats statsData) {
-        int displayedHealth = (int) Math.round(statsData.getHealth());
+        int displayedCurrentHealth = (int) Math.ceil(getCurrentHealth(player));
+        int displayedMaxHealth = (int) Math.round(clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH));
         int displayedMana = (int) Math.round(statsData.getMana());
 
         player.sendActionBar(Component.text(
-                "§c❤ " + displayedHealth + " §8| §b✎ " + displayedMana
+                "§c❤ " + displayedCurrentHealth + "/" + displayedMaxHealth
+                        + " §8| §b✎ " + displayedMana
         ));
     }
 
