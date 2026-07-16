@@ -9,6 +9,7 @@ import me.lrg.skyblock.core.model.StatsType;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -119,6 +120,30 @@ public final class StatsCalculationManager {
 
     public void clear() {
         modifiersByPlayer.clear();
+    }
+
+    public Map<StatsLayer, StatsModifierData> getLayerSnapshot(UUID uuid) {
+        Objects.requireNonNull(uuid, "uuid");
+
+        ConcurrentMap<StatsLayer, StatsModifierData> layers = modifiersByPlayer.get(uuid);
+        if (layers == null || layers.isEmpty()) {
+            return Map.of();
+        }
+
+        EnumMap<StatsLayer, StatsModifierData> snapshot = new EnumMap<>(StatsLayer.class);
+        for (Map.Entry<StatsLayer, StatsModifierData> entry : layers.entrySet()) {
+            StatsModifierData copy = new StatsModifierData();
+            entry.getValue().getBaseStats().forEach(copy::setBaseStat);
+            entry.getValue().getExtraStats().forEach(copy::setExtraStat);
+            snapshot.put(entry.getKey(), copy);
+        }
+        return Map.copyOf(snapshot);
+    }
+
+    public Optional<StatsModifierData> getLayerSnapshot(UUID uuid, StatsLayer layer) {
+        Objects.requireNonNull(uuid, "uuid");
+        Objects.requireNonNull(layer, "layer");
+        return Optional.ofNullable(getLayerSnapshot(uuid).get(layer));
     }
 
     private StatsModifierData getOrCreateLayer(UUID uuid, StatsLayer layer) {
