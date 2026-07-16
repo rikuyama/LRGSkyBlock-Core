@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.4.24
+version: 0.4.25
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "1.20"
 author: LRG
@@ -24,6 +24,10 @@ commands:
     description: Statsキャッシュ状態を確認するコマンド
     usage: /statscache [save]
 
+  lrg:
+    description: LRG SkyBlock管理コマンド
+    usage: /lrg stats <view|set|add|reset|recalculate>
+
 permissions:
   lrgskyblock.command.coins:
     description: Coins確認コマンドの使用権限
@@ -39,4 +43,8 @@ permissions:
 
   lrgskyblock.command.stats.admin:
     description: ステータス管理・キャッシュ確認コマンドの使用権限
+    default: op
+
+  lrgskyblock.command.lrg.stats:
+    description: Statsデバッグコマンドの使用権限
     default: op
