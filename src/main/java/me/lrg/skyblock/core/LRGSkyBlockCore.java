@@ -12,6 +12,7 @@ import me.lrg.skyblock.core.listener.FarmingFortuneListener;
 import me.lrg.skyblock.core.listener.ForagingFortuneListener;
 import me.lrg.skyblock.core.listener.HealthListener;
 import me.lrg.skyblock.core.listener.MiningFortuneListener;
+import me.lrg.skyblock.core.listener.ManaListener;
 import me.lrg.skyblock.core.listener.PlayerCombatListener;
 import me.lrg.skyblock.core.listener.PlayerListener;
 import me.lrg.skyblock.core.manager.CoinManager;
@@ -99,6 +100,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerListener(playerManager, statsManager), this);
         getServer().getPluginManager().registerEvents(new PlayerCombatListener(statsManager), this);
         getServer().getPluginManager().registerEvents(new HealthListener(this, statsManager), this);
+        getServer().getPluginManager().registerEvents(new ManaListener(this, statsManager), this);
         getServer().getPluginManager().registerEvents(new FarmingFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new MiningFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager), this);
@@ -148,6 +150,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private void startTasks() {
         if (statsManager != null) {
             statsManager.startActionBarTask();
+            statsManager.startManaRegenTask();
             statsManager.startAutoSaveTask();
         }
     }
@@ -155,6 +158,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private void stopTasks() {
         if (statsManager != null) {
             statsManager.stopAutoSaveTask();
+            statsManager.stopManaRegenTask();
             statsManager.stopActionBarTask();
         }
     }
