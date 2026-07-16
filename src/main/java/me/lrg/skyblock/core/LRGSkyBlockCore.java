@@ -1,5 +1,6 @@
 package me.lrg.skyblock.core;
 
+import me.lrg.skyblock.core.command.ActionBarCommand;
 import me.lrg.skyblock.core.command.CoinCommand;
 import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.command.StatsCacheCommand;
@@ -15,6 +16,7 @@ import me.lrg.skyblock.core.listener.MiningFortuneListener;
 import me.lrg.skyblock.core.listener.ManaListener;
 import me.lrg.skyblock.core.listener.PlayerCombatListener;
 import me.lrg.skyblock.core.listener.PlayerListener;
+import me.lrg.skyblock.core.manager.ActionBarSettingsManager;
 import me.lrg.skyblock.core.manager.CoinManager;
 import me.lrg.skyblock.core.manager.FortuneManager;
 import me.lrg.skyblock.core.manager.PlayerManager;
@@ -33,6 +35,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private StatsRepository statsRepository;
     private PlayerManager playerManager;
     private CoinManager coinManager;
+    private ActionBarSettingsManager actionBarSettingsManager;
     private StatsManager statsManager;
     private FortuneManager fortuneManager;
     private PlayerDefaultSettings playerDefaultSettings;
@@ -92,7 +95,8 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private void setupManagers() {
         this.playerManager = new PlayerManager(this, playerRepository, playerDefaultSettings);
         this.coinManager = new CoinManager(playerManager);
-        this.statsManager = new StatsManager(this, statsRepository);
+        this.actionBarSettingsManager = new ActionBarSettingsManager(this);
+        this.statsManager = new StatsManager(this, statsRepository, actionBarSettingsManager);
         this.fortuneManager = new FortuneManager(statsManager, fortuneTargetSettings);
     }
 
@@ -125,6 +129,20 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             StatsCommand statsCommandExecutor = new StatsCommand(statsManager);
             statsCommand.setExecutor(statsCommandExecutor);
             statsCommand.setTabCompleter(statsCommandExecutor);
+        }
+
+
+        PluginCommand actionBarCommand = getCommand("actionbar");
+
+        if (actionBarCommand == null) {
+            getLogger().warning("plugin.yml に actionbar コマンドが登録されていません。");
+        } else {
+            ActionBarCommand actionBarCommandExecutor = new ActionBarCommand(
+                    actionBarSettingsManager,
+                    statsManager
+            );
+            actionBarCommand.setExecutor(actionBarCommandExecutor);
+            actionBarCommand.setTabCompleter(actionBarCommandExecutor);
         }
 
         PluginCommand statsCacheCommand = getCommand("statscache");
@@ -198,6 +216,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     public StatsRepository getStatsRepository() { return statsRepository; }
     public PlayerManager getPlayerManager() { return playerManager; }
     public CoinManager getCoinManager() { return coinManager; }
+    public ActionBarSettingsManager getActionBarSettingsManager() { return actionBarSettingsManager; }
     public StatsManager getStatsManager() { return statsManager; }
     public FortuneManager getFortuneManager() { return fortuneManager; }
     public FortuneTargetSettings getFortuneTargetSettings() { return fortuneTargetSettings; }
