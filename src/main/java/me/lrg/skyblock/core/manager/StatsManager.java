@@ -19,6 +19,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +29,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.function.Consumer;
 
 public class StatsManager {
 
@@ -360,6 +362,70 @@ public class StatsManager {
 
     public StatsCalculationManager getStatsCalculationManager() {
         return statsCalculationManager;
+    }
+
+    public Map<StatsLayer, StatsModifierData> getStatsLayerSnapshot(UUID uuid) {
+        Objects.requireNonNull(uuid, "uuid");
+        return statsCalculationManager.getLayerSnapshot(uuid);
+    }
+
+    public boolean recalculateStats(UUID uuid) {
+        Objects.requireNonNull(uuid, "uuid");
+        Player player = Bukkit.getPlayer(uuid);
+        if (player == null || !player.isOnline()) {
+            return false;
+        }
+        return applyStatsToPlayer(player);
+    }
+
+    public void loadStatsForDebug(UUID uuid, Consumer<Optional<StatsData>> callback) {
+        Objects.requireNonNull(uuid, "uuid");
+        Objects.requireNonNull(callback, "callback");
+
+        StatsData cached = statsDataMap.get(uuid);
+        if (cached != null) {
+            callback.accept(Optional.of(cached));
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            Optional<StatsData> loaded;
+            try {
+                loaded = statsRepository.loadStats(uuid);
+            } catch (RepositoryException exception) {
+                logger.log(Level.SEVERE, "デバッグ用Stats読み込みに失敗しました。uuid=" + uuid, exception);
+                loaded = Optional.empty();
+            }
+
+            Optional<StatsData> result = loaded;
+            Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+        });
+    }
+
+    public void saveStatsForDebug(StatsData statsData, Consumer<Boolean> callback) {
+        Objects.requireNonNull(statsData, "statsData");
+        Objects.requireNonNull(callback, "callback");
+
+        StatsData cached = statsDataMap.get(statsData.getUuid());
+        if (cached == statsData) {
+            statsData.markDirty();
+            applyStatsIfOnline(statsData.getUuid());
+            callback.accept(true);
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean success = saveStatsWithRetry(statsData);
+            if (success) {
+                statsData.markClean();
+            }
+            Bukkit.getScheduler().runTask(plugin, () -> callback.accept(success));
+        });
+    }
+
+    public StatsData createDefaultStatsForDebug(UUID uuid) {
+        Objects.requireNonNull(uuid, "uuid");
+        return createDefaultStatsData(uuid);
     }
 
     private void applyStatsIfOnline(UUID uuid) {
