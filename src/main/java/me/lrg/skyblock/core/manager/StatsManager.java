@@ -59,6 +59,7 @@ public class StatsManager {
     private final JavaPlugin plugin;
     private final StatsRepository statsRepository;
     private final Logger logger;
+    private final ActionBarSettingsManager actionBarSettingsManager;
 
     private final ConcurrentMap<UUID, StatsData> statsDataMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, StatsLoadState> loadStateMap = new ConcurrentHashMap<>();
@@ -73,9 +74,14 @@ public class StatsManager {
     private BukkitTask autoSaveTask;
     private BukkitTask manaRegenTask;
 
-    public StatsManager(JavaPlugin plugin, StatsRepository statsRepository) {
+    public StatsManager(
+            JavaPlugin plugin,
+            StatsRepository statsRepository,
+            ActionBarSettingsManager actionBarSettingsManager
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.statsRepository = Objects.requireNonNull(statsRepository, "statsRepository");
+        this.actionBarSettingsManager = Objects.requireNonNull(actionBarSettingsManager, "actionBarSettingsManager");
         this.logger = plugin.getLogger();
     }
 
@@ -233,8 +239,8 @@ public class StatsManager {
         this.actionBarTask = Bukkit.getScheduler().runTaskTimer(
                 plugin,
                 this::sendActionBarToOnlinePlayers,
-                ACTION_BAR_INTERVAL_TICKS,
-                ACTION_BAR_INTERVAL_TICKS
+                getActionBarIntervalTicks(),
+                getActionBarIntervalTicks()
         );
 
         logger.info("[LRG] Stats ActionBar task started.");
@@ -312,7 +318,7 @@ public class StatsManager {
         applyHealth(player, calculatedStats);
         applyMana(player, calculatedStats);
         applySpeed(player, calculatedStats);
-        sendHealthManaActionBar(player, calculatedStats);
+        sendStatsActionBar(player);
         return true;
     }
 
@@ -798,13 +804,23 @@ public class StatsManager {
 
     private void sendActionBarToOnlinePlayers() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            getStatsData(player.getUniqueId())
-                    .map(statsCalculationManager::calculate)
-                    .ifPresent(calculatedStats -> sendHealthManaActionBar(player, calculatedStats));
+            sendStatsActionBar(player);
         }
     }
 
-    private void sendHealthManaActionBar(Player player, CalculatedStats statsData) {
+    public boolean sendStatsActionBar(Player player) {
+        Objects.requireNonNull(player, "player");
+
+        if (!player.isOnline() || !actionBarSettingsManager.isEnabled(player)) {
+            return false;
+        }
+
+        Optional<CalculatedStats> calculatedStatsOptional = getCalculatedStats(player.getUniqueId());
+        if (calculatedStatsOptional.isEmpty()) {
+            return false;
+        }
+
+        CalculatedStats statsData = calculatedStatsOptional.get();
         int displayedCurrentHealth = (int) Math.ceil(getCurrentHealth(player));
         int displayedMaxHealth = (int) Math.round(clamp(statsData.getHealth(), MIN_HEALTH, MAX_HEALTH));
         int displayedCurrentMana = (int) Math.floor(getCurrentMana(player));
@@ -814,6 +830,15 @@ public class StatsManager {
                 "§c❤ " + displayedCurrentHealth + "/" + displayedMaxHealth
                         + " §8| §b✎ " + displayedCurrentMana + "/" + displayedMaxMana
         ));
+        return true;
+    }
+
+    private long getActionBarIntervalTicks() {
+        long configured = plugin.getConfig().getLong(
+                "action-bar.update-interval-ticks",
+                ACTION_BAR_INTERVAL_TICKS
+        );
+        return Math.max(5L, configured);
     }
 
     private boolean rollCritical(double criticalChance) {
