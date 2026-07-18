@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.6.5
+version: 0.7.0
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "26.2"
 author: LRG
@@ -53,3 +53,34 @@ permissions:
     default: true
   lrgskyblock.command.level.admin:
     default: op
+
+  lrgskyblock.rank.vip:
+    description: VIPランク
+    default: false
+  lrgskyblock.rank.vip-plus:
+    description: VIP+ランク
+    default: false
+  lrgskyblock.rank.mvp:
+    description: MVPランク
+    default: false
+  lrgskyblock.rank.mvp-plus:
+    description: MVP+ランク
+    default: false
+  lrgskyblock.rank.mvp-plus-plus:
+    description: MVP++ランク
+    default: false
+  lrgskyblock.rank.moderator:
+    description: Moderatorランク
+    default: false
+  lrgskyblock.rank.builder:
+    description: Builderランク
+    default: false
+  lrgskyblock.rank.engineer:
+    description: Engineerランク
+    default: false
+  lrgskyblock.rank.admin:
+    description: Adminランク
+    default: op
+  lrgskyblock.badge.youtube:
+    description: YouTubeバッジ
+    default: false
