@@ -220,9 +220,9 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         if (rankNameTagManager != null) {
             rankRefreshTask = getServer().getScheduler().runTaskTimer(
                     this,
-                    rankNameTagManager::refreshAll,
-                    100L,
-                    100L
+                    rankNameTagManager::tick,
+                    5L,
+                    5L
             );
         }
     }
