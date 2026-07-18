@@ -26,9 +26,12 @@ import me.lrg.skyblock.core.manager.StatsManager;
 import me.lrg.skyblock.core.gui.FortuneGui;
 import me.lrg.skyblock.core.repository.PlayerRepository;
 import me.lrg.skyblock.core.repository.StatsRepository;
+import me.lrg.skyblock.core.playerlevel.command.PlayerLevelCommand;
 import me.lrg.skyblock.core.playerlevel.database.PlayerLevelSchemaMigrator;
+import me.lrg.skyblock.core.playerlevel.listener.PlayerLevelEffectListener;
 import me.lrg.skyblock.core.playerlevel.manager.PlayerLevelManager;
 import me.lrg.skyblock.core.playerlevel.repository.PlayerLevelRepository;
+import me.lrg.skyblock.core.playerlevel.unlock.PlayerLevelUnlockManager;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -46,6 +49,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private StatsManager statsManager;
     private FortuneManager fortuneManager;
     private PlayerLevelManager playerLevelManager;
+    private PlayerLevelUnlockManager playerLevelUnlockManager;
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
     private FortuneGui fortuneGui;
@@ -112,6 +116,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.statsManager = new StatsManager(this, statsRepository, actionBarSettingsManager);
         this.fortuneManager = new FortuneManager(statsManager, fortuneTargetSettings);
         this.playerLevelManager = new PlayerLevelManager(this, playerLevelRepository);
+        this.playerLevelUnlockManager = new PlayerLevelUnlockManager(playerLevelManager);
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
     }
 
@@ -124,6 +129,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new MiningFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new FortuneGuiListener(fortuneGui, fortuneTargetSettings), this);
+        getServer().getPluginManager().registerEvents(new PlayerLevelEffectListener(), this);
     }
 
     private void registerCommands() {
@@ -176,6 +182,15 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             getLogger().warning("plugin.yml に fortunegui コマンドが登録されていません。");
         } else {
             fortuneGuiCommand.setExecutor(new FortuneGuiCommand(fortuneGui));
+        }
+
+        PluginCommand levelCommand = getCommand("level");
+        if (levelCommand == null) {
+            getLogger().warning("plugin.yml に level コマンドが登録されていません。");
+        } else {
+            PlayerLevelCommand executor = new PlayerLevelCommand(playerLevelManager, playerLevelUnlockManager);
+            levelCommand.setExecutor(executor);
+            levelCommand.setTabCompleter(executor);
         }
 
         PluginCommand lrgCommand = getCommand("lrg");
@@ -257,5 +272,6 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     public StatsManager getStatsManager() { return statsManager; }
     public FortuneManager getFortuneManager() { return fortuneManager; }
     public PlayerLevelManager getPlayerLevelManager() { return playerLevelManager; }
+    public PlayerLevelUnlockManager getPlayerLevelUnlockManager() { return playerLevelUnlockManager; }
     public FortuneTargetSettings getFortuneTargetSettings() { return fortuneTargetSettings; }
 }
