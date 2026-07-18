@@ -15,3 +15,8 @@ database:
 
   messages:
     data-load-failed-kick: "&cプレイヤーデータの読み込みに失敗しました。&7時間をおいてもう一度参加してください。"
+player-level:
+  effects:
+    message: true
+    sound: true
+    particles: true

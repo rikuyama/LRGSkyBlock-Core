@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.5.0
+version: 0.7.0
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "26.2"
 author: LRG
@@ -25,6 +25,13 @@ commands:
     description: Fortuneカテゴリ設定GUIを開く
     usage: /fortunegui
     permission: lrgskyblock.command.fortunegui
+  level:
+    description: Player Levelを確認・操作するコマンド
+    usage: /level [player] | /level <set|addxp|removexp> <player> <value>
+    aliases: [playerlevel]
+  rank:
+    description: ランク表示を確認・デバッグするコマンド
+    usage: /rank [player] | /rank <set|reset> <player> [rank]
   lrg:
     description: LRG SkyBlock管理コマンド
     usage: /lrg stats <view|set|add|reset|recalculate>
@@ -42,5 +49,31 @@ permissions:
   lrgskyblock.command.lrg.stats:
     default: op
   lrgskyblock.command.fortunegui:
-    description: Fortuneカテゴリ設定GUIの使用権限
     default: op
+  lrgskyblock.command.level:
+    default: true
+  lrgskyblock.command.level.admin:
+    default: op
+  lrgskyblock.command.rank:
+    default: true
+  lrgskyblock.command.rank.admin:
+    default: op
+  lrgskyblock.rank.vip:
+    default: false
+  lrgskyblock.rank.vip-plus:
+    default: false
+  lrgskyblock.rank.mvp:
+    default: false
+  lrgskyblock.rank.mvp-plus:
+    default: false
+  lrgskyblock.rank.mvp-plus-plus:
+    default: false
+  lrgskyblock.rank.youtube:
+    default: false
+  lrgskyblock.rank.staff:
+    default: false
+  lrgskyblock.rank.admin:
+    default: op
+  lrgskyblock.badge.youtube:
+    description: 旧YouTube権限との互換用
+    default: false

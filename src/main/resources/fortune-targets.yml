@@ -1,18 +1,10 @@
 settings:
   maximum-fortune: 10000.0
-
 categories:
-  ORE:
-    enabled: true
-  BLOCK:
-    enabled: true
-  GEMSTONE:
-    enabled: true
-  DWARVEN_METAL:
+  MINING:
     enabled: true
   FARMING:
     enabled: true
   FORAGING:
     enabled: true
-
 overrides: {}

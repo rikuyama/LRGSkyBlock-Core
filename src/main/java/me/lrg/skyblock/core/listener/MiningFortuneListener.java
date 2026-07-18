@@ -1,6 +1,7 @@
 package me.lrg.skyblock.core.listener;
 
 import me.lrg.skyblock.core.manager.FortuneManager;
+import me.lrg.skyblock.core.manager.PlacedBlockTracker;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -31,9 +32,11 @@ import java.util.Objects;
 public class MiningFortuneListener implements Listener {
 
     private final FortuneManager fortuneManager;
+    private final PlacedBlockTracker placedBlockTracker;
 
-    public MiningFortuneListener(FortuneManager fortuneManager) {
+    public MiningFortuneListener(FortuneManager fortuneManager, PlacedBlockTracker placedBlockTracker) {
         this.fortuneManager = Objects.requireNonNull(fortuneManager, "fortuneManager");
+        this.placedBlockTracker = Objects.requireNonNull(placedBlockTracker, "placedBlockTracker");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -42,7 +45,11 @@ public class MiningFortuneListener implements Listener {
         Block block = event.getBlock();
         Material blockType = block.getType();
 
-        if (!isMiningFortuneTarget(blockType)) {
+        if (placedBlockTracker.isPlayerPlaced(block)) {
+            return;
+        }
+
+        if (!fortuneManager.isMiningTarget(blockType)) {
             return;
         }
 
