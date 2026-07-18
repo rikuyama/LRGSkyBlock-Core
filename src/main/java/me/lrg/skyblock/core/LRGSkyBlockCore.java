@@ -2,6 +2,7 @@ package me.lrg.skyblock.core;
 
 import me.lrg.skyblock.core.command.ActionBarCommand;
 import me.lrg.skyblock.core.command.CoinCommand;
+import me.lrg.skyblock.core.command.FortuneGuiCommand;
 import me.lrg.skyblock.core.command.StatsCommand;
 import me.lrg.skyblock.core.command.StatsCacheCommand;
 import me.lrg.skyblock.core.command.StatsDebugCommand;
@@ -12,6 +13,7 @@ import me.lrg.skyblock.core.database.StatsSchemaMigrator;
 import me.lrg.skyblock.core.listener.FarmingFortuneListener;
 import me.lrg.skyblock.core.listener.ForagingFortuneListener;
 import me.lrg.skyblock.core.listener.HealthListener;
+import me.lrg.skyblock.core.listener.FortuneGuiListener;
 import me.lrg.skyblock.core.listener.MiningFortuneListener;
 import me.lrg.skyblock.core.listener.ManaListener;
 import me.lrg.skyblock.core.listener.PlayerCombatListener;
@@ -21,6 +23,7 @@ import me.lrg.skyblock.core.manager.CoinManager;
 import me.lrg.skyblock.core.manager.FortuneManager;
 import me.lrg.skyblock.core.manager.PlayerManager;
 import me.lrg.skyblock.core.manager.StatsManager;
+import me.lrg.skyblock.core.gui.FortuneGui;
 import me.lrg.skyblock.core.repository.PlayerRepository;
 import me.lrg.skyblock.core.repository.StatsRepository;
 import org.bukkit.command.PluginCommand;
@@ -40,6 +43,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private FortuneManager fortuneManager;
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
+    private FortuneGui fortuneGui;
 
     @Override
     public void onEnable() {
@@ -98,6 +102,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.actionBarSettingsManager = new ActionBarSettingsManager(this);
         this.statsManager = new StatsManager(this, statsRepository, actionBarSettingsManager);
         this.fortuneManager = new FortuneManager(statsManager, fortuneTargetSettings);
+        this.fortuneGui = new FortuneGui(fortuneTargetSettings);
     }
 
     private void registerListeners() {
@@ -108,6 +113,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new FarmingFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new MiningFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager), this);
+        getServer().getPluginManager().registerEvents(new FortuneGuiListener(fortuneGui, fortuneTargetSettings), this);
     }
 
     private void registerCommands() {
@@ -153,6 +159,14 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             statsCacheCommand.setExecutor(new StatsCacheCommand(statsManager));
         }
 
+
+        PluginCommand fortuneGuiCommand = getCommand("fortunegui");
+
+        if (fortuneGuiCommand == null) {
+            getLogger().warning("plugin.yml に fortunegui コマンドが登録されていません。");
+        } else {
+            fortuneGuiCommand.setExecutor(new FortuneGuiCommand(fortuneGui));
+        }
 
         PluginCommand lrgCommand = getCommand("lrg");
 

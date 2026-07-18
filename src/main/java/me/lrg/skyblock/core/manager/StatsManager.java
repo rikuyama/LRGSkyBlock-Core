@@ -367,10 +367,21 @@ public class StatsManager {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(statsType, "statsType");
 
-        return getStatsData(player.getUniqueId())
+        double value = getStatsData(player.getUniqueId())
                 .map(statsCalculationManager::calculate)
                 .map(calculatedStats -> calculatedStats.getExtraStat(statsType))
                 .orElse(statsType.getDefaultValue());
+
+        logger.info(
+                "[DEBUG] player="
+                        + player.getName()
+                        + ", stat="
+                        + statsType.getKey()
+                        + ", value="
+                        + value
+        );
+
+        return value;
     }
 
 
@@ -723,7 +734,7 @@ public class StatsManager {
     }
 
     private double getPreviouslyAppliedMaxHealth(Player player) {
-        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealthAttribute == null) {
             return getMaxHealth(player);
         }
@@ -739,7 +750,7 @@ public class StatsManager {
     }
 
     private void applyVisualHealth(Player player, double currentHealth, double maxHealth) {
-        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealthAttribute == null) {
             logger.warning("GENERIC_MAX_HEALTH が取得できませんでした。player=" + player.getName());
             return;
@@ -792,7 +803,7 @@ public class StatsManager {
     }
 
     private void applySpeed(Player player, CalculatedStats statsData) {
-        AttributeInstance movementSpeedAttribute = player.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
+        AttributeInstance movementSpeedAttribute = player.getAttribute(Attribute.MOVEMENT_SPEED);
         if (movementSpeedAttribute == null) {
             logger.warning("GENERIC_MOVEMENT_SPEED が取得できませんでした。player=" + player.getName());
             return;

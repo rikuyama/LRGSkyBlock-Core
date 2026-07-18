@@ -1,16 +1,18 @@
-DIAMOND_ORE:
-  category: ORE
-  base-drop-amount: 1
-  fortune-enabled: true
-  silk-touch-enabled: true
-  collection-enabled: true
-  skill-experience-enabled: true
-  fortune-drop-materials:
-    - DIAMOND
-  custom-drop-id: ""
+settings:
+  maximum-fortune: 10000.0
 
-COAL_ORE:
-  category: ORE
-  base-drop-amount: 1
-  fortune-enabled: true
-  silk-touch-enabled: true
+categories:
+  ORE:
+    enabled: true
+  BLOCK:
+    enabled: true
+  GEMSTONE:
+    enabled: true
+  DWARVEN_METAL:
+    enabled: true
+  FARMING:
+    enabled: true
+  FORAGING:
+    enabled: true
+
+overrides: {}

@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class FortuneManager {
-
     private final StatsManager statsManager;
     private final FortuneTargetSettings targetSettings;
 
@@ -22,45 +21,25 @@ public class FortuneManager {
     }
 
     public int calculateDropAmount(int baseAmount, double fortune) {
-        if (baseAmount <= 0) {
-            return 0;
-        }
-
+        if (baseAmount <= 0) return 0;
         double safeFortune = targetSettings.clampFortune(fortune);
         int guaranteedExtraDrops = (int) Math.floor(safeFortune / 100.0);
         double bonusChance = safeFortune % 100.0;
         int result = baseAmount * (1 + guaranteedExtraDrops);
-
         for (int i = 0; i < baseAmount; i++) {
-            if (rollChance(bonusChance)) {
-                result++;
-            }
+            if (ThreadLocalRandom.current().nextDouble(100.0) < bonusChance) result++;
         }
-
         return result;
     }
 
     public double getMiningFortune(Player player, Material material) {
-        Objects.requireNonNull(player, "player");
-        Objects.requireNonNull(material, "material");
-
-        Optional<FortuneTargetRule> ruleOptional = targetSettings.findRule(material);
-
-        if (ruleOptional.isEmpty() || !ruleOptional.get().isFortuneEnabled()) {
-            return 0.0;
-        }
-
+        Optional<FortuneTargetRule> ruleOptional = enabledRule(material);
+        if (ruleOptional.isEmpty()) return 0.0;
         FortuneCategory category = ruleOptional.get().getCategory();
-
-        if (category != FortuneCategory.ORE
-                && category != FortuneCategory.BLOCK
-                && category != FortuneCategory.GEMSTONE
-                && category != FortuneCategory.DWARVEN_METAL) {
-            return 0.0;
-        }
+        if (category != FortuneCategory.ORE && category != FortuneCategory.BLOCK
+                && category != FortuneCategory.GEMSTONE && category != FortuneCategory.DWARVEN_METAL) return 0.0;
 
         double fortune = statsManager.getExtraStat(player, StatsType.MINING_FORTUNE);
-
         fortune += switch (category) {
             case ORE -> statsManager.getExtraStat(player, StatsType.ORE_FORTUNE);
             case BLOCK -> statsManager.getExtraStat(player, StatsType.BLOCK_FORTUNE);
@@ -68,24 +47,13 @@ public class FortuneManager {
             case DWARVEN_METAL -> statsManager.getExtraStat(player, StatsType.DWARVEN_METAL_FORTUNE);
             default -> 0.0;
         };
-
         return targetSettings.clampFortune(fortune);
     }
 
     public double getFarmingFortune(Player player, Material material) {
-        Objects.requireNonNull(player, "player");
-        Objects.requireNonNull(material, "material");
-
-        Optional<FortuneTargetRule> ruleOptional = targetSettings.findRule(material);
-
-        if (ruleOptional.isEmpty()
-                || !ruleOptional.get().isFortuneEnabled()
-                || ruleOptional.get().getCategory() != FortuneCategory.FARMING) {
-            return 0.0;
-        }
-
+        Optional<FortuneTargetRule> ruleOptional = enabledRule(material);
+        if (ruleOptional.isEmpty() || ruleOptional.get().getCategory() != FortuneCategory.FARMING) return 0.0;
         double fortune = statsManager.getExtraStat(player, StatsType.FARMING_FORTUNE);
-
         fortune += switch (material) {
             case WHEAT, WHEAT_SEEDS -> statsManager.getExtraStat(player, StatsType.WHEAT_FORTUNE);
             case CARROT, CARROTS -> statsManager.getExtraStat(player, StatsType.CARROT_FORTUNE);
@@ -100,41 +68,22 @@ public class FortuneManager {
             case NETHER_WART -> statsManager.getExtraStat(player, StatsType.NETHER_WART_FORTUNE);
             default -> 0.0;
         };
-
         return targetSettings.clampFortune(fortune);
     }
 
     public double getForagingFortune(Player player, Material material) {
-        Objects.requireNonNull(player, "player");
-        Objects.requireNonNull(material, "material");
-
-        Optional<FortuneTargetRule> ruleOptional = targetSettings.findRule(material);
-
-        if (ruleOptional.isEmpty()
-                || !ruleOptional.get().isFortuneEnabled()
-                || ruleOptional.get().getCategory() != FortuneCategory.FORAGING) {
-            return 0.0;
-        }
-
-        return targetSettings.clampFortune(
-                statsManager.getExtraStat(player, StatsType.FORAGING_FORTUNE)
-        );
+        Optional<FortuneTargetRule> ruleOptional = enabledRule(material);
+        if (ruleOptional.isEmpty() || ruleOptional.get().getCategory() != FortuneCategory.FORAGING) return 0.0;
+        return targetSettings.clampFortune(statsManager.getExtraStat(player, StatsType.FORAGING_FORTUNE));
     }
 
-    public Optional<FortuneTargetRule> getTargetRule(Material material) {
-        return targetSettings.findRule(material);
+    private Optional<FortuneTargetRule> enabledRule(Material material) {
+        return targetSettings.findRule(material).filter(FortuneTargetRule::isFortuneEnabled);
     }
 
-    public boolean isFortuneTarget(Material material) {
-        return targetSettings.isFortuneTarget(material);
-    }
-
+    public Optional<FortuneTargetRule> getTargetRule(Material material) { return targetSettings.findRule(material); }
+    public boolean isFortuneTarget(Material material) { return targetSettings.isFortuneTarget(material); }
     public boolean shouldApplyFortune(Material blockMaterial, Material dropMaterial) {
         return targetSettings.acceptsFortuneDrop(blockMaterial, dropMaterial);
-    }
-
-    private boolean rollChance(double chancePercent) {
-        double clampedChance = Math.max(0.0, Math.min(chancePercent, 100.0));
-        return ThreadLocalRandom.current().nextDouble(100.0) < clampedChance;
     }
 }
