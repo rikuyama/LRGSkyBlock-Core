@@ -1,0 +1,41 @@
+# Player Level Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build the v0.6.0 persistent Player Level foundation.
+
+**Architecture:** Keep formula and state mutation independent of Bukkit, isolate SQL in a repository, and integrate asynchronous load/save through a manager following the existing PlayerManager and StatsManager patterns.
+
+**Tech Stack:** Java 25, Paper API 26.2, MySQL, HikariCP, Maven, JUnit 5.
+
+## Global Constraints
+- Existing plugin package remains `me.lrg.skyblock.core`.
+- Database work must not run on the main server thread.
+- Level is at least 1 and XP values are non-negative.
+- XP overflow may grant multiple levels.
+
+---
+
+### Task 1: Formula and data model
+**Files:** Create `PlayerLevelFormula.java`, `PlayerLevelData.java`, and focused JUnit tests.
+- [x] Add failing tests for XP requirements, multi-level overflow, negative input, dirty state, and setters.
+- [x] Implement minimal formula and model behavior.
+
+### Task 2: Persistence
+**Files:** Create `PlayerLevelSchemaMigrator.java` and `PlayerLevelRepository.java`.
+- [x] Create `player_levels` safely at startup.
+- [x] Add load, create, and upsert save operations.
+
+### Task 3: Runtime manager
+**Files:** Create `PlayerLevelManager.java`.
+- [x] Add asynchronous join loading, asynchronous quit saving, synchronous shutdown saving, cache access, and XP API.
+
+### Task 4: Plugin integration
+**Files:** Modify `LRGSkyBlockCore.java`, `PlayerListener.java`, `pom.xml`, and `plugin.yml`.
+- [x] Initialize schema, repository, and manager.
+- [x] Wire join, quit, shutdown, getters, and version 0.6.0.
+- [x] Add JUnit 5 and Surefire configuration.
+
+### Task 5: Verification and packaging
+- [x] Run available static checks.
+- [x] Package the complete project as an updated ZIP.
