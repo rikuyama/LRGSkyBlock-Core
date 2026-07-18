@@ -1,60 +1,46 @@
 name: LRGSkyBlock-Core
-version: 0.4.28
+version: 0.5.0
 main: me.lrg.skyblock.core.LRGSkyBlockCore
-api-version: "1.20"
+api-version: "26.2"
 author: LRG
-
 softdepend:
   - PlaceholderAPI
-
 commands:
   coins:
     description: Coinsを確認・操作するコマンド
     usage: /coins
-    aliases:
-      - coin
-
+    aliases: [coin]
   stats:
     description: ステータスを確認・操作するコマンド
     usage: /stats
-    aliases:
-      - stat
-
+    aliases: [stat]
   actionbar:
     description: Health・ManaのActionBar表示を切り替えるコマンド
     usage: /actionbar <on|off|toggle|status>
-    aliases:
-      - ab
-
+    aliases: [ab]
   statscache:
     description: Statsキャッシュ状態を確認するコマンド
     usage: /statscache [save]
-
+  fortunegui:
+    description: Fortuneカテゴリ設定GUIを開く
+    usage: /fortunegui
+    permission: lrgskyblock.command.fortunegui
   lrg:
     description: LRG SkyBlock管理コマンド
     usage: /lrg stats <view|set|add|reset|recalculate>
-
 permissions:
   lrgskyblock.command.coins:
-    description: Coins確認コマンドの使用権限
     default: true
-
   lrgskyblock.command.coins.admin:
-    description: Coins管理コマンドの使用権限
     default: op
-
   lrgskyblock.command.stats:
-    description: ステータス確認コマンドの使用権限
     default: true
-
   lrgskyblock.command.actionbar:
-    description: ActionBar表示設定コマンドの使用権限
     default: true
-
   lrgskyblock.command.stats.admin:
-    description: ステータス管理・キャッシュ確認コマンドの使用権限
     default: op
-
   lrgskyblock.command.lrg.stats:
-    description: Statsデバッグコマンドの使用権限
+    default: op
+  lrgskyblock.command.fortunegui:
+    description: Fortuneカテゴリ設定GUIの使用権限
     default: op
