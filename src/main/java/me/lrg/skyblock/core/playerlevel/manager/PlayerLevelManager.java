@@ -2,6 +2,7 @@ package me.lrg.skyblock.core.playerlevel.manager;
 
 import me.lrg.skyblock.core.playerlevel.api.PlayerLevelXpReason;
 import me.lrg.skyblock.core.playerlevel.api.PlayerLevelXpResult;
+import me.lrg.skyblock.core.playerlevel.event.PlayerLevelLoadedEvent;
 import me.lrg.skyblock.core.playerlevel.event.PlayerLevelUpEvent;
 import me.lrg.skyblock.core.playerlevel.formula.PlayerLevelFormula;
 import me.lrg.skyblock.core.playerlevel.model.PlayerLevelData;
@@ -139,6 +140,7 @@ public final class PlayerLevelManager {
                 if (player != null && player.isOnline()) {
                     data.markClean();
                     cache.put(uuid, data);
+                    Bukkit.getPluginManager().callEvent(new PlayerLevelLoadedEvent(player));
                 }
             });
         } catch (RepositoryException exception) {
