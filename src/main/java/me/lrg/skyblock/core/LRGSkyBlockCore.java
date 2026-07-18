@@ -26,6 +26,8 @@ import me.lrg.skyblock.core.manager.StatsManager;
 import me.lrg.skyblock.core.gui.FortuneGui;
 import me.lrg.skyblock.core.repository.PlayerRepository;
 import me.lrg.skyblock.core.repository.StatsRepository;
+import me.lrg.skyblock.core.rank.RankNameTagListener;
+import me.lrg.skyblock.core.rank.RankNameTagManager;
 import me.lrg.skyblock.core.playerlevel.command.PlayerLevelCommand;
 import me.lrg.skyblock.core.playerlevel.database.PlayerLevelSchemaMigrator;
 import me.lrg.skyblock.core.playerlevel.listener.PlayerLevelEffectListener;
@@ -34,6 +36,7 @@ import me.lrg.skyblock.core.playerlevel.repository.PlayerLevelRepository;
 import me.lrg.skyblock.core.playerlevel.unlock.PlayerLevelUnlockManager;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.logging.Level;
 
@@ -53,6 +56,8 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
     private FortuneGui fortuneGui;
+    private RankNameTagManager rankNameTagManager;
+    private BukkitTask rankRefreshTask;
 
     @Override
     public void onEnable() {
@@ -118,6 +123,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.playerLevelManager = new PlayerLevelManager(this, playerLevelRepository);
         this.playerLevelUnlockManager = new PlayerLevelUnlockManager(playerLevelManager);
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
+        this.rankNameTagManager = new RankNameTagManager(playerLevelManager);
     }
 
     private void registerListeners() {
@@ -130,6 +136,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager), this);
         getServer().getPluginManager().registerEvents(new FortuneGuiListener(fortuneGui, fortuneTargetSettings), this);
         getServer().getPluginManager().registerEvents(new PlayerLevelEffectListener(), this);
+        getServer().getPluginManager().registerEvents(new RankNameTagListener(rankNameTagManager), this);
     }
 
     private void registerCommands() {
@@ -210,9 +217,21 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             statsManager.startManaRegenTask();
             statsManager.startAutoSaveTask();
         }
+        if (rankNameTagManager != null) {
+            rankRefreshTask = getServer().getScheduler().runTaskTimer(
+                    this,
+                    rankNameTagManager::refreshAll,
+                    100L,
+                    100L
+            );
+        }
     }
 
     private void stopTasks() {
+        if (rankRefreshTask != null) {
+            rankRefreshTask.cancel();
+            rankRefreshTask = null;
+        }
         if (statsManager != null) {
             statsManager.stopAutoSaveTask();
             statsManager.stopManaRegenTask();
