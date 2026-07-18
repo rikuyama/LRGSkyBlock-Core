@@ -26,6 +26,9 @@ import me.lrg.skyblock.core.manager.StatsManager;
 import me.lrg.skyblock.core.gui.FortuneGui;
 import me.lrg.skyblock.core.repository.PlayerRepository;
 import me.lrg.skyblock.core.repository.StatsRepository;
+import me.lrg.skyblock.core.playerlevel.database.PlayerLevelSchemaMigrator;
+import me.lrg.skyblock.core.playerlevel.manager.PlayerLevelManager;
+import me.lrg.skyblock.core.playerlevel.repository.PlayerLevelRepository;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -36,11 +39,13 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private DatabaseManager databaseManager;
     private PlayerRepository playerRepository;
     private StatsRepository statsRepository;
+    private PlayerLevelRepository playerLevelRepository;
     private PlayerManager playerManager;
     private CoinManager coinManager;
     private ActionBarSettingsManager actionBarSettingsManager;
     private StatsManager statsManager;
     private FortuneManager fortuneManager;
+    private PlayerLevelManager playerLevelManager;
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
     private FortuneGui fortuneGui;
@@ -71,8 +76,10 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         stopTasks();
         savePlayerDataOnShutdown();
         saveStatsDataOnShutdown();
+        savePlayerLevelDataOnShutdown();
         clearPlayerCache();
         clearStatsCache();
+        clearPlayerLevelCache();
         closeDatabase();
         getLogger().info("LRG SkyBlock Core を停止しました。");
     }
@@ -84,6 +91,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private void migrateDatabaseSchema() {
         StatsSchemaMigrator statsSchemaMigrator = new StatsSchemaMigrator(databaseManager, getLogger());
         statsSchemaMigrator.migrate();
+        new PlayerLevelSchemaMigrator(databaseManager, getLogger()).migrate();
     }
 
     private void setupConfigs() {
@@ -94,6 +102,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private void setupRepositories() {
         this.playerRepository = new PlayerRepository(databaseManager, getLogger());
         this.statsRepository = new StatsRepository(databaseManager, getLogger());
+        this.playerLevelRepository = new PlayerLevelRepository(databaseManager, getLogger());
     }
 
     private void setupManagers() {
@@ -102,11 +111,12 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.actionBarSettingsManager = new ActionBarSettingsManager(this);
         this.statsManager = new StatsManager(this, statsRepository, actionBarSettingsManager);
         this.fortuneManager = new FortuneManager(statsManager, fortuneTargetSettings);
+        this.playerLevelManager = new PlayerLevelManager(this, playerLevelRepository);
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
     }
 
     private void registerListeners() {
-        getServer().getPluginManager().registerEvents(new PlayerListener(playerManager, statsManager), this);
+        getServer().getPluginManager().registerEvents(new PlayerListener(playerManager, statsManager, playerLevelManager), this);
         getServer().getPluginManager().registerEvents(new PlayerCombatListener(statsManager), this);
         getServer().getPluginManager().registerEvents(new HealthListener(this, statsManager), this);
         getServer().getPluginManager().registerEvents(new ManaListener(this, statsManager), this);
@@ -207,6 +217,12 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         }
     }
 
+    private void savePlayerLevelDataOnShutdown() {
+        if (playerLevelManager != null) {
+            playerLevelManager.saveAllSynchronously();
+        }
+    }
+
     private void clearPlayerCache() {
         if (playerManager != null) {
             playerManager.clear();
@@ -219,6 +235,12 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         }
     }
 
+    private void clearPlayerLevelCache() {
+        if (playerLevelManager != null) {
+            playerLevelManager.clear();
+        }
+    }
+
     private void closeDatabase() {
         if (databaseManager != null) {
             databaseManager.close();
@@ -228,10 +250,12 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     public DatabaseManager getDatabaseManager() { return databaseManager; }
     public PlayerRepository getPlayerRepository() { return playerRepository; }
     public StatsRepository getStatsRepository() { return statsRepository; }
+    public PlayerLevelRepository getPlayerLevelRepository() { return playerLevelRepository; }
     public PlayerManager getPlayerManager() { return playerManager; }
     public CoinManager getCoinManager() { return coinManager; }
     public ActionBarSettingsManager getActionBarSettingsManager() { return actionBarSettingsManager; }
     public StatsManager getStatsManager() { return statsManager; }
     public FortuneManager getFortuneManager() { return fortuneManager; }
+    public PlayerLevelManager getPlayerLevelManager() { return playerLevelManager; }
     public FortuneTargetSettings getFortuneTargetSettings() { return fortuneTargetSettings; }
 }
