@@ -1,0 +1,42 @@
+# Player Level v0.6.0 Design
+
+## Goal
+Add a persistent player-level foundation that can later power Auto Pickup, skills, collections, rewards, unlocks, and GUI features.
+
+## Architecture
+- `PlayerLevelData` owns level and XP state plus dirty tracking.
+- `PlayerLevelFormula` owns XP requirements and level-up calculation rules.
+- `PlayerLevelRepository` is the only class that contains SQL for `player_levels`.
+- `PlayerLevelManager` loads/saves cached online-player data asynchronously and exposes the public XP API.
+- `PlayerLevelSchemaMigrator` creates the table during plugin startup.
+- `PlayerListener` delegates join and quit lifecycle events to the manager.
+
+## Data Model
+`player_levels(uuid VARCHAR(36) PRIMARY KEY, level INT, current_xp BIGINT, total_xp BIGINT, updated_at TIMESTAMP)`.
+
+Defaults are level 1, current XP 0, and total XP 0. Level is never below 1. XP is never negative. XP additions preserve overflow and may grant multiple levels.
+
+## Formula
+XP required to advance from level N is `100 * N`. Formula logic is isolated so a table-based curve can replace it later without changing manager or repository APIs.
+
+## Public API
+- `getLevel(UUID)`
+- `getCurrentXp(UUID)`
+- `getTotalXp(UUID)`
+- `getRequiredXp(int)`
+- `addXp(UUID, long)`
+- `removeXp(UUID, long)`
+- `setXp(UUID, long)`
+- `setLevel(UUID, int)`
+
+Mutating methods return `false` when the player is not currently cached.
+
+## Lifecycle
+Join loads or creates data asynchronously, then caches only if the player is still online. Quit removes the cache entry and saves it asynchronously. Shutdown saves all cached dirty entries synchronously before closing the database.
+
+## Error Handling
+Repository failures are logged and wrapped in `RepositoryException`. Failed level loads do not kick the player because Player Level is not yet required for basic login; the failure is logged and the player remains uncached for this subsystem.
+
+## Scope
+Included: schema, model, formula, repository, manager, join/quit/shutdown wiring, API, dirty tracking, multi-level overflow.
+Excluded: messages, effects, rewards, unlock definitions, commands, GUI, and Auto Pickup.

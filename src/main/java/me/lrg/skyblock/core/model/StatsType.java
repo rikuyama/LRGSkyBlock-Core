@@ -17,23 +17,8 @@ public enum StatsType {
     GEMSTONE_SPREAD("gemstone_spread", "ジェムストーン採掘範囲", 0.0, false, StatsCategory.MINING),
     PRISTINE("pristine", "プリスティン", 0.0, false, StatsCategory.MINING),
     MINING_FORTUNE("mining_fortune", "マイニングフォーチュン", 0.0, true, StatsCategory.MINING),
-    ORE_FORTUNE("ore_fortune", "鉱石フォーチュン", 0.0, true, StatsCategory.MINING),
-    BLOCK_FORTUNE("block_fortune", "ブロックフォーチュン", 0.0, true, StatsCategory.MINING),
-    DWARVEN_METAL_FORTUNE("dwarven_metal_fortune", "ドワーフ金属フォーチュン", 0.0, true, StatsCategory.MINING),
-    GEMSTONE_FORTUNE("gemstone_fortune", "ジェムストーンフォーチュン", 0.0, true, StatsCategory.MINING),
 
     FARMING_FORTUNE("farming_fortune", "ファーミングフォーチュン", 0.0, true, StatsCategory.FARMING),
-    WHEAT_FORTUNE("wheat_fortune", "小麦フォーチュン", 0.0, true, StatsCategory.FARMING),
-    CARROT_FORTUNE("carrot_fortune", "ニンジンフォーチュン", 0.0, true, StatsCategory.FARMING),
-    POTATO_FORTUNE("potato_fortune", "ジャガイモフォーチュン", 0.0, true, StatsCategory.FARMING),
-    PUMPKIN_FORTUNE("pumpkin_fortune", "カボチャフォーチュン", 0.0, true, StatsCategory.FARMING),
-    SUGAR_CANE_FORTUNE("sugar_cane_fortune", "サトウキビフォーチュン", 0.0, true, StatsCategory.FARMING),
-    BAMBOO_FORTUNE("bamboo_fortune", "竹フォーチュン", 0.0, true, StatsCategory.FARMING),
-    MELON_SLICE_FORTUNE("melon_slice_fortune", "スイカフォーチュン", 0.0, true, StatsCategory.FARMING),
-    CACTUS_FORTUNE("cactus_fortune", "サボテンフォーチュン", 0.0, true, StatsCategory.FARMING),
-    COCOA_BEANS_FORTUNE("cocoa_beans_fortune", "カカオ豆フォーチュン", 0.0, true, StatsCategory.FARMING),
-    MUSHROOM_FORTUNE("mushroom_fortune", "キノコフォーチュン", 0.0, true, StatsCategory.FARMING),
-    NETHER_WART_FORTUNE("nether_wart_fortune", "ネザーウォートフォーチュン", 0.0, true, StatsCategory.FARMING),
 
     FORAGING_FORTUNE("foraging_fortune", "伐採フォーチュン", 0.0, true, StatsCategory.FORAGING),
 

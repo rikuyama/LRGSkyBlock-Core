@@ -2,6 +2,7 @@ package me.lrg.skyblock.core.listener;
 
 import me.lrg.skyblock.core.manager.PlayerManager;
 import me.lrg.skyblock.core.manager.StatsManager;
+import me.lrg.skyblock.core.playerlevel.manager.PlayerLevelManager;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -28,10 +29,16 @@ public class PlayerListener implements Listener {
 
     private final PlayerManager playerManager;
     private final StatsManager statsManager;
+    private final PlayerLevelManager playerLevelManager;
 
-    public PlayerListener(PlayerManager playerManager, StatsManager statsManager) {
+    public PlayerListener(
+            PlayerManager playerManager,
+            StatsManager statsManager,
+            PlayerLevelManager playerLevelManager
+    ) {
         this.playerManager = Objects.requireNonNull(playerManager, "playerManager");
         this.statsManager = Objects.requireNonNull(statsManager, "statsManager");
+        this.playerLevelManager = Objects.requireNonNull(playerLevelManager, "playerLevelManager");
     }
 
     @EventHandler
@@ -40,6 +47,7 @@ public class PlayerListener implements Listener {
 
         playerManager.loadPlayer(player);
         statsManager.loadStats(player);
+        playerLevelManager.load(player);
     }
 
     @EventHandler
@@ -48,5 +56,6 @@ public class PlayerListener implements Listener {
 
         playerManager.saveAndRemovePlayer(uuid);
         statsManager.saveAndRemoveStats(uuid);
+        playerLevelManager.saveAndRemove(uuid);
     }
 }

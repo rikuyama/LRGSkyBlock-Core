@@ -11,33 +11,20 @@ public final class FortuneCategoryResolver {
     public static Optional<FortuneCategory> resolve(Material material) {
         if (material == null || !material.isBlock()) return Optional.empty();
         String name = material.name().toUpperCase(Locale.ROOT);
-
-        if (isOre(name)) return Optional.of(FortuneCategory.ORE);
-        if (isGemstone(name)) return Optional.of(FortuneCategory.GEMSTONE);
-        if (isDwarvenMetal(name)) return Optional.of(FortuneCategory.DWARVEN_METAL);
         if (isFarming(name)) return Optional.of(FortuneCategory.FARMING);
         if (isForaging(name)) return Optional.of(FortuneCategory.FORAGING);
-        if (isMiningBlock(name)) return Optional.of(FortuneCategory.BLOCK);
+        if (isMining(name)) return Optional.of(FortuneCategory.MINING);
         return Optional.empty();
-    }
-
-    private static boolean isOre(String name) {
-        return name.endsWith("_ORE") || name.equals("ANCIENT_DEBRIS");
-    }
-
-    private static boolean isGemstone(String name) {
-        return name.contains("AMETHYST") && !name.equals("BUDDING_AMETHYST");
-    }
-
-    private static boolean isDwarvenMetal(String name) {
-        return name.equals("RAW_IRON_BLOCK") || name.equals("RAW_GOLD_BLOCK") || name.equals("RAW_COPPER_BLOCK");
     }
 
     private static boolean isFarming(String name) {
         return switch (name) {
             case "WHEAT", "CARROTS", "POTATOES", "BEETROOTS", "PUMPKIN", "MELON",
                  "SUGAR_CANE", "BAMBOO", "BAMBOO_SAPLING", "CACTUS", "COCOA",
-                 "NETHER_WART", "BROWN_MUSHROOM", "RED_MUSHROOM", "MUSHROOM_STEM" -> true;
+                 "NETHER_WART", "BROWN_MUSHROOM", "RED_MUSHROOM", "MUSHROOM_STEM",
+                 "CRIMSON_FUNGUS", "WARPED_FUNGUS", "TORCHFLOWER_CROP", "PITCHER_CROP",
+                 "SWEET_BERRY_BUSH", "KELP", "KELP_PLANT", "CAVE_VINES", "CAVE_VINES_PLANT",
+                 "CHORUS_FLOWER", "CHORUS_PLANT" -> true;
             default -> false;
         };
     }
@@ -46,9 +33,12 @@ public final class FortuneCategoryResolver {
         return name.endsWith("_LOG") || name.endsWith("_WOOD") || name.endsWith("_STEM") || name.endsWith("_HYPHAE");
     }
 
-    private static boolean isMiningBlock(String name) {
+    private static boolean isMining(String name) {
+        if (name.endsWith("_ORE") || name.equals("ANCIENT_DEBRIS")) return true;
+        if (name.contains("AMETHYST") && !name.equals("BUDDING_AMETHYST")) return true;
         return switch (name) {
-            case "STONE", "COBBLESTONE", "DEEPSLATE", "COBBLED_DEEPSLATE", "ANDESITE", "DIORITE",
+            case "RAW_IRON_BLOCK", "RAW_GOLD_BLOCK", "RAW_COPPER_BLOCK",
+                 "STONE", "COBBLESTONE", "DEEPSLATE", "COBBLED_DEEPSLATE", "ANDESITE", "DIORITE",
                  "GRANITE", "TUFF", "CALCITE", "BASALT", "SMOOTH_BASALT", "BLACKSTONE",
                  "NETHERRACK", "END_STONE" -> true;
             default -> false;
