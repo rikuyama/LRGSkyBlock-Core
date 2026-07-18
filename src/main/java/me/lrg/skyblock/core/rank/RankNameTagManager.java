@@ -16,6 +16,8 @@ public final class RankNameTagManager {
     private final PlayerLevelManager playerLevelManager;
     private final RankResolver rankResolver;
     private final RankDisplay rankDisplay;
+    private int animationPhase;
+    private int refreshCounter;
 
     public RankNameTagManager(PlayerLevelManager playerLevelManager) {
         this.playerLevelManager = Objects.requireNonNull(playerLevelManager, "playerLevelManager");
@@ -27,7 +29,7 @@ public final class RankNameTagManager {
         Objects.requireNonNull(player, "player");
         RankProfile profile = rankResolver.resolve(player::hasPermission);
         int level = playerLevelManager.getLevel(player.getUniqueId());
-        Component prefix = rankDisplay.fullPrefix(level, profile);
+        Component prefix = rankDisplay.fullPrefix(level, profile, animationPhase);
 
         Team team = getOrCreateTeam(player.getUniqueId());
         removeFromOtherLrgTeams(player.getName(), team);
@@ -51,6 +53,23 @@ public final class RankNameTagManager {
             }
         }
         player.playerListName(null);
+    }
+
+    public void tick() {
+        animationPhase = Math.floorMod(animationPhase + 1, 7);
+        refreshCounter++;
+
+        boolean fullRefresh = refreshCounter >= 20;
+        if (fullRefresh) {
+            refreshCounter = 0;
+        }
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            int level = playerLevelManager.getLevel(player.getUniqueId());
+            if (fullRefresh || rankDisplay.isRainbowLevel(level)) {
+                update(player);
+            }
+        }
     }
 
     public void refreshAll() {
