@@ -52,12 +52,18 @@ public final class RankDisplay {
     }
 
     public NamedTextColor levelColor(int level) {
-        if (level >= 300) return NamedTextColor.GOLD;
-        if (level >= 250) return NamedTextColor.RED;
-        if (level >= 200) return NamedTextColor.LIGHT_PURPLE;
-        if (level >= 150) return NamedTextColor.AQUA;
-        if (level >= 100) return NamedTextColor.GREEN;
-        if (level >= 50) return NamedTextColor.YELLOW;
+        if (level >= 480) return NamedTextColor.DARK_RED;
+        if (level >= 440) return NamedTextColor.RED;
+        if (level >= 400) return NamedTextColor.GOLD;
+        if (level >= 360) return NamedTextColor.DARK_PURPLE;
+        if (level >= 320) return NamedTextColor.LIGHT_PURPLE;
+        if (level >= 280) return NamedTextColor.BLUE;
+        if (level >= 240) return NamedTextColor.AQUA;
+        if (level >= 200) return NamedTextColor.DARK_AQUA;
+        if (level >= 160) return NamedTextColor.DARK_GREEN;
+        if (level >= 120) return NamedTextColor.GREEN;
+        if (level >= 80) return NamedTextColor.YELLOW;
+        if (level >= 40) return NamedTextColor.WHITE;
         return NamedTextColor.GRAY;
     }
 
