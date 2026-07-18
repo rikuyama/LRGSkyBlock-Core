@@ -1,5 +1,8 @@
 package me.lrg.skyblock.core.playerlevel.manager;
 
+import me.lrg.skyblock.core.playerlevel.api.PlayerLevelXpReason;
+import me.lrg.skyblock.core.playerlevel.api.PlayerLevelXpResult;
+import me.lrg.skyblock.core.playerlevel.event.PlayerLevelUpEvent;
 import me.lrg.skyblock.core.playerlevel.formula.PlayerLevelFormula;
 import me.lrg.skyblock.core.playerlevel.model.PlayerLevelData;
 import me.lrg.skyblock.core.playerlevel.repository.PlayerLevelRepository;
@@ -68,7 +71,36 @@ public final class PlayerLevelManager {
     }
 
     public boolean addXp(UUID uuid, long amount) {
-        return mutate(uuid, data -> data.addXp(amount));
+        return addXp(uuid, amount, PlayerLevelXpReason.OTHER).success();
+    }
+
+    public PlayerLevelXpResult addXp(UUID uuid, long amount, PlayerLevelXpReason reason) {
+        Objects.requireNonNull(uuid, "uuid");
+        Objects.requireNonNull(reason, "reason");
+        if (amount < 0L) {
+            throw new IllegalArgumentException("amount must not be negative");
+        }
+        PlayerLevelData data = cache.get(uuid);
+        if (data == null) {
+            return new PlayerLevelXpResult(false, 1, 1, 0L, 0L, getRequiredXp(1), reason);
+        }
+        int oldLevel = data.getLevel();
+        data.addXp(amount);
+        int newLevel = data.getLevel();
+        if (newLevel > oldLevel) {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline()) {
+                Bukkit.getPluginManager().callEvent(new PlayerLevelUpEvent(player, oldLevel, newLevel, reason));
+            }
+        }
+        return new PlayerLevelXpResult(true, oldLevel, newLevel, amount,
+                data.getCurrentXp(), data.getRequiredXp(), reason);
+    }
+
+    public long getXpUntilNextLevel(UUID uuid) {
+        PlayerLevelData data = cache.get(uuid);
+        if (data == null) return getRequiredXp(1);
+        return Math.max(0L, data.getRequiredXp() - data.getCurrentXp());
     }
 
     public boolean removeXp(UUID uuid, long amount) {
