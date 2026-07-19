@@ -1,5 +1,6 @@
 package me.lrg.skyblock.core.listener;
 
+import me.lrg.skyblock.core.autopickup.AutoPickupManager;
 import me.lrg.skyblock.core.manager.FortuneManager;
 import me.lrg.skyblock.core.manager.PlacedBlockTracker;
 import me.lrg.skyblock.core.util.FortuneToolUtil;
@@ -22,10 +23,12 @@ public class FarmingFortuneListener implements Listener {
 
     private final FortuneManager fortuneManager;
     private final PlacedBlockTracker placedBlockTracker;
+    private final AutoPickupManager autoPickupManager;
 
-    public FarmingFortuneListener(FortuneManager fortuneManager, PlacedBlockTracker placedBlockTracker) {
+    public FarmingFortuneListener(FortuneManager fortuneManager, PlacedBlockTracker placedBlockTracker, AutoPickupManager autoPickupManager) {
         this.fortuneManager = Objects.requireNonNull(fortuneManager, "fortuneManager");
         this.placedBlockTracker = Objects.requireNonNull(placedBlockTracker, "placedBlockTracker");
+        this.autoPickupManager = Objects.requireNonNull(autoPickupManager, "autoPickupManager");
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -80,7 +83,7 @@ public class FarmingFortuneListener implements Listener {
                 finalDrop.setAmount(finalAmount);
             }
 
-            world.dropItemNaturally(block.getLocation(), finalDrop);
+            deliverOrDrop(player, block.getLocation(), java.util.List.of(finalDrop), world);
         }
     }
 
@@ -114,7 +117,7 @@ public class FarmingFortuneListener implements Listener {
 
         ItemStack dropItem = new ItemStack(dropMaterial, finalAmount);
         Location dropLocation = block.getLocation().add(0.5, 0.5, 0.5);
-        block.getWorld().dropItemNaturally(dropLocation, dropItem);
+        deliverOrDrop(player, dropLocation, java.util.List.of(dropItem), block.getWorld());
     }
 
     private int countVerticalCropBlocks(Block startBlock, Material material) {
@@ -181,4 +184,10 @@ public class FarmingFortuneListener implements Listener {
             default -> false;
         };
     }
+    private void deliverOrDrop(Player player, Location location, Collection<ItemStack> drops, World world) {
+        if (!autoPickupManager.collect(player, drops, location)) {
+            drops.forEach(drop -> world.dropItemNaturally(location, drop));
+        }
+    }
+
 }
