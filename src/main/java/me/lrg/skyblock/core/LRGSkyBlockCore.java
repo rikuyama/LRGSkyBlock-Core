@@ -32,6 +32,9 @@ import me.lrg.skyblock.core.rank.RankNameTagManager;
 import me.lrg.skyblock.core.playerlevel.command.PlayerLevelCommand;
 import me.lrg.skyblock.core.playerlevel.database.PlayerLevelSchemaMigrator;
 import me.lrg.skyblock.core.playerlevel.listener.PlayerLevelEffectListener;
+import me.lrg.skyblock.core.playerlevel.listener.PlayerLevelStatsListener;
+import me.lrg.skyblock.core.autopickup.AutoPickupListener;
+import me.lrg.skyblock.core.autopickup.InventoryDelivery;
 import me.lrg.skyblock.core.playerlevel.manager.PlayerLevelManager;
 import me.lrg.skyblock.core.playerlevel.repository.PlayerLevelRepository;
 import me.lrg.skyblock.core.playerlevel.unlock.PlayerLevelUnlockManager;
@@ -141,6 +144,8 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager, placedBlockTracker), this);
         getServer().getPluginManager().registerEvents(new FortuneGuiListener(fortuneGui, fortuneTargetSettings), this);
         getServer().getPluginManager().registerEvents(new PlayerLevelEffectListener(this, playerLevelUnlockManager), this);
+        getServer().getPluginManager().registerEvents(new PlayerLevelStatsListener(playerLevelManager, statsManager), this);
+        getServer().getPluginManager().registerEvents(new AutoPickupListener(playerLevelUnlockManager, new InventoryDelivery()), this);
         getServer().getPluginManager().registerEvents(new RankNameTagListener(rankNameTagManager), this);
     }
 
