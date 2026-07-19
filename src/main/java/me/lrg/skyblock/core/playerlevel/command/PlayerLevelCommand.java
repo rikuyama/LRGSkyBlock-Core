@@ -60,7 +60,17 @@ public final class PlayerLevelCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(Component.text("=== " + target.getName() + " のPlayer Level ===", NamedTextColor.GOLD));
         sender.sendMessage(Component.text("Lv." + level + "  " + xp + " / " + required + " XP", NamedTextColor.YELLOW));
         sender.sendMessage(Component.text(progress, NamedTextColor.GREEN));
-        sender.sendMessage(Component.text("自動回収: " + (unlockManager.isUnlocked(target.getUniqueId(), PlayerLevelUnlockManager.AUTO_PICKUP) ? "解放済み" : "Lv.6で解放"), NamedTextColor.AQUA));
+        sender.sendMessage(Component.text("解放機能:", NamedTextColor.AQUA));
+        unlockManager.getUnlocks().entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByValue())
+                .forEach(entry -> {
+                    boolean unlocked = unlockManager.isUnlocked(target.getUniqueId(), entry.getKey());
+                    String status = unlocked ? "解放済み" : "Lv." + entry.getValue() + "で解放";
+                    sender.sendMessage(Component.text("  " + unlockManager.getDisplayName(entry.getKey()) + ": " + status,
+                            unlocked ? NamedTextColor.GREEN : NamedTextColor.GRAY));
+                });
+        sender.sendMessage(Component.text("ステータスボーナス: Health +" + (long) me.lrg.skyblock.core.playerlevel.formula.PlayerLevelStatFormula.healthBonus(level)
+                + " / Strength +" + (long) me.lrg.skyblock.core.playerlevel.formula.PlayerLevelStatFormula.strengthBonus(level), NamedTextColor.RED));
         return true;
     }
 
