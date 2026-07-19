@@ -1,0 +1,10 @@
+# LRGSkyBlock-Core v0.7.0 Player Level Design
+
+- Player Level XP requirement starts at 100 and increases by 50 every 40 levels.
+- Every level-up grants +5 Health through the PLAYER_LEVEL stats layer.
+- Every fifth level grants +1 Strength.
+- Unlocks: Wardrobe Lv5, Auto Pickup Lv6, Bazaar Lv7, Accessory Bag Lv10.
+- Accessory Bag expansion is reserved for Redstone Collection in v0.8.0.
+- Auto Pickup sends block drops directly to inventory and drops only overflow at the block location.
+- Vanilla experience is granted directly without spawning experience orbs.
+- `/level` displays progress, unlocked/history entries, and level stat bonuses.
