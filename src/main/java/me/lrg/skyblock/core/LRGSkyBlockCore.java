@@ -34,6 +34,7 @@ import me.lrg.skyblock.core.playerlevel.database.PlayerLevelSchemaMigrator;
 import me.lrg.skyblock.core.playerlevel.listener.PlayerLevelEffectListener;
 import me.lrg.skyblock.core.playerlevel.listener.PlayerLevelStatsListener;
 import me.lrg.skyblock.core.autopickup.AutoPickupListener;
+import me.lrg.skyblock.core.autopickup.AutoPickupManager;
 import me.lrg.skyblock.core.autopickup.InventoryDelivery;
 import me.lrg.skyblock.core.playerlevel.manager.PlayerLevelManager;
 import me.lrg.skyblock.core.playerlevel.repository.PlayerLevelRepository;
@@ -58,6 +59,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private me.lrg.skyblock.core.manager.PlacedBlockTracker placedBlockTracker;
     private PlayerLevelManager playerLevelManager;
     private PlayerLevelUnlockManager playerLevelUnlockManager;
+    private AutoPickupManager autoPickupManager;
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
     private FortuneGui fortuneGui;
@@ -129,8 +131,16 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.fortuneManager = new FortuneManager(statsManager, fortuneTargetSettings);
         this.playerLevelManager = new PlayerLevelManager(this, playerLevelRepository);
         this.playerLevelUnlockManager = new PlayerLevelUnlockManager(playerLevelManager);
+        this.autoPickupManager = new AutoPickupManager(playerLevelUnlockManager, new InventoryDelivery());
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
         this.rankNameTagManager = new RankNameTagManager(playerLevelManager);
+    }
+
+    /**
+     * Minionなど別システムからAuto Pickupへドロップを渡すための共通API。
+     */
+    public AutoPickupManager getAutoPickupManager() {
+        return autoPickupManager;
     }
 
     private void registerListeners() {
@@ -139,13 +149,13 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new HealthListener(this, statsManager), this);
         getServer().getPluginManager().registerEvents(new ManaListener(this, statsManager), this);
         getServer().getPluginManager().registerEvents(placedBlockTracker, this);
-        getServer().getPluginManager().registerEvents(new FarmingFortuneListener(fortuneManager, placedBlockTracker), this);
-        getServer().getPluginManager().registerEvents(new MiningFortuneListener(fortuneManager, placedBlockTracker), this);
-        getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager, placedBlockTracker), this);
+        getServer().getPluginManager().registerEvents(new FarmingFortuneListener(fortuneManager, placedBlockTracker, autoPickupManager), this);
+        getServer().getPluginManager().registerEvents(new MiningFortuneListener(fortuneManager, placedBlockTracker, autoPickupManager), this);
+        getServer().getPluginManager().registerEvents(new ForagingFortuneListener(fortuneManager, placedBlockTracker, autoPickupManager), this);
         getServer().getPluginManager().registerEvents(new FortuneGuiListener(fortuneGui, fortuneTargetSettings), this);
         getServer().getPluginManager().registerEvents(new PlayerLevelEffectListener(this, playerLevelUnlockManager), this);
         getServer().getPluginManager().registerEvents(new PlayerLevelStatsListener(playerLevelManager, statsManager), this);
-        getServer().getPluginManager().registerEvents(new AutoPickupListener(playerLevelUnlockManager, new InventoryDelivery()), this);
+        getServer().getPluginManager().registerEvents(new AutoPickupListener(autoPickupManager), this);
         getServer().getPluginManager().registerEvents(new RankNameTagListener(rankNameTagManager), this);
     }
 
