@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.7.0
+version: 0.7.1
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "26.2"
 author: LRG
