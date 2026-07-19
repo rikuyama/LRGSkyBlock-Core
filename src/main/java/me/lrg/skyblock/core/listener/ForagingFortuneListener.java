@@ -1,5 +1,6 @@
 package me.lrg.skyblock.core.listener;
 
+import me.lrg.skyblock.core.autopickup.AutoPickupManager;
 import me.lrg.skyblock.core.manager.FortuneManager;
 import me.lrg.skyblock.core.manager.PlacedBlockTracker;
 import me.lrg.skyblock.core.util.FortuneToolUtil;
@@ -20,10 +21,12 @@ public class ForagingFortuneListener implements Listener {
 
     private final FortuneManager fortuneManager;
     private final PlacedBlockTracker placedBlockTracker;
+    private final AutoPickupManager autoPickupManager;
 
-    public ForagingFortuneListener(FortuneManager fortuneManager, PlacedBlockTracker placedBlockTracker) {
+    public ForagingFortuneListener(FortuneManager fortuneManager, PlacedBlockTracker placedBlockTracker, AutoPickupManager autoPickupManager) {
         this.fortuneManager = Objects.requireNonNull(fortuneManager, "fortuneManager");
         this.placedBlockTracker = Objects.requireNonNull(placedBlockTracker, "placedBlockTracker");
+        this.autoPickupManager = Objects.requireNonNull(autoPickupManager, "autoPickupManager");
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -56,6 +59,7 @@ public class ForagingFortuneListener implements Listener {
 
         event.setDropItems(false);
         World world = block.getWorld();
+        java.util.List<ItemStack> finalDrops = new java.util.ArrayList<>();
 
         for (ItemStack originalDrop : originalDrops) {
             ItemStack finalDrop = originalDrop.clone();
@@ -65,7 +69,11 @@ public class ForagingFortuneListener implements Listener {
                 finalDrop.setAmount(finalAmount);
             }
 
-            world.dropItemNaturally(block.getLocation(), finalDrop);
+            finalDrops.add(finalDrop);
+        }
+
+        if (!autoPickupManager.collect(player, finalDrops, block.getLocation())) {
+            finalDrops.forEach(drop -> world.dropItemNaturally(block.getLocation(), drop));
         }
     }
 
