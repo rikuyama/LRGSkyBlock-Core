@@ -1,0 +1,14 @@
+# Player Level v0.7.0 Implementation Plan
+
+**Goal:** Complete Player Level rewards and Auto Pickup while preserving existing Stats and Fortune behavior.
+
+**Architecture:** Player Level contributes Stats through a dedicated calculation layer. Feature unlocks remain table-driven. Auto Pickup consumes final block drops and sends overflow back to the world.
+
+**Tech Stack:** Java 25, Paper 26.2, Maven, JUnit 5, MySQL.
+
+- [x] Add pure level stat formulas and tests.
+- [x] Add PLAYER_LEVEL stats layer and listener.
+- [x] Register Wardrobe, Auto Pickup, Bazaar and Accessory Bag unlocks.
+- [x] Add Auto Pickup delivery and block listener.
+- [x] Expand `/level` with unlock history and stat bonuses.
+- [x] Register listeners in plugin bootstrap.
