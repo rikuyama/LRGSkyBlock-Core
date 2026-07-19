@@ -10,7 +10,10 @@ import java.util.OptionalInt;
 import java.util.UUID;
 
 public final class PlayerLevelUnlockManager {
+    public static final String WARDROBE = "wardrobe";
     public static final String AUTO_PICKUP = "auto_pickup";
+    public static final String BAZAAR = "bazaar";
+    public static final String ACCESSORY_BAG = "accessory_bag";
 
     private final PlayerLevelManager levelManager;
     private final Map<String, Integer> requiredLevels = new LinkedHashMap<>();
@@ -18,7 +21,10 @@ public final class PlayerLevelUnlockManager {
 
     public PlayerLevelUnlockManager(PlayerLevelManager levelManager) {
         this.levelManager = Objects.requireNonNull(levelManager, "levelManager");
+        register(WARDROBE, "Wardrobe", 5);
         register(AUTO_PICKUP, "自動回収", 6);
+        register(BAZAAR, "バザー", 7);
+        register(ACCESSORY_BAG, "Accessory Bag", 10);
     }
 
     public boolean isUnlocked(UUID uuid, String featureId) {
