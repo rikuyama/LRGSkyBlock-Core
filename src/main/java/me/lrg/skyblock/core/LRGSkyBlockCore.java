@@ -39,6 +39,13 @@ import me.lrg.skyblock.core.autopickup.InventoryDelivery;
 import me.lrg.skyblock.core.playerlevel.manager.PlayerLevelManager;
 import me.lrg.skyblock.core.playerlevel.repository.PlayerLevelRepository;
 import me.lrg.skyblock.core.playerlevel.unlock.PlayerLevelUnlockManager;
+import me.lrg.skyblock.core.wardrobe.command.WardrobeCommand;
+import me.lrg.skyblock.core.wardrobe.database.WardrobeSchemaMigrator;
+import me.lrg.skyblock.core.wardrobe.gui.WardrobeGui;
+import me.lrg.skyblock.core.wardrobe.listener.WardrobeListener;
+import me.lrg.skyblock.core.wardrobe.listener.WardrobePlayerListener;
+import me.lrg.skyblock.core.wardrobe.manager.WardrobeManager;
+import me.lrg.skyblock.core.wardrobe.repository.WardrobeRepository;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -51,6 +58,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private PlayerRepository playerRepository;
     private StatsRepository statsRepository;
     private PlayerLevelRepository playerLevelRepository;
+    private WardrobeRepository wardrobeRepository;
     private PlayerManager playerManager;
     private CoinManager coinManager;
     private ActionBarSettingsManager actionBarSettingsManager;
@@ -60,6 +68,8 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private PlayerLevelManager playerLevelManager;
     private PlayerLevelUnlockManager playerLevelUnlockManager;
     private AutoPickupManager autoPickupManager;
+    private WardrobeManager wardrobeManager;
+    private WardrobeGui wardrobeGui;
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
     private FortuneGui fortuneGui;
@@ -97,6 +107,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         if (placedBlockTracker != null) placedBlockTracker.save();
         clearStatsCache();
         clearPlayerLevelCache();
+        clearWardrobeCache();
         closeDatabase();
         getLogger().info("LRG SkyBlock Core を停止しました。");
     }
@@ -109,6 +120,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         StatsSchemaMigrator statsSchemaMigrator = new StatsSchemaMigrator(databaseManager, getLogger());
         statsSchemaMigrator.migrate();
         new PlayerLevelSchemaMigrator(databaseManager, getLogger()).migrate();
+        new WardrobeSchemaMigrator(databaseManager, getLogger()).migrate();
     }
 
     private void setupConfigs() {
@@ -120,6 +132,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.playerRepository = new PlayerRepository(databaseManager, getLogger());
         this.statsRepository = new StatsRepository(databaseManager, getLogger());
         this.playerLevelRepository = new PlayerLevelRepository(databaseManager, getLogger());
+        this.wardrobeRepository = new WardrobeRepository(databaseManager, getLogger());
     }
 
     private void setupManagers() {
@@ -132,6 +145,8 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.playerLevelManager = new PlayerLevelManager(this, playerLevelRepository);
         this.playerLevelUnlockManager = new PlayerLevelUnlockManager(playerLevelManager);
         this.autoPickupManager = new AutoPickupManager(playerLevelUnlockManager, new InventoryDelivery());
+        this.wardrobeManager = new WardrobeManager(this, wardrobeRepository);
+        this.wardrobeGui = new WardrobeGui(wardrobeManager);
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
         this.rankNameTagManager = new RankNameTagManager(playerLevelManager);
     }
@@ -156,6 +171,8 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerLevelEffectListener(this, playerLevelUnlockManager), this);
         getServer().getPluginManager().registerEvents(new PlayerLevelStatsListener(playerLevelManager, statsManager), this);
         getServer().getPluginManager().registerEvents(new AutoPickupListener(autoPickupManager), this);
+        getServer().getPluginManager().registerEvents(new WardrobePlayerListener(wardrobeManager), this);
+        getServer().getPluginManager().registerEvents(new WardrobeListener(wardrobeManager, wardrobeGui), this);
         getServer().getPluginManager().registerEvents(new RankNameTagListener(rankNameTagManager), this);
     }
 
@@ -218,6 +235,13 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             PlayerLevelCommand executor = new PlayerLevelCommand(playerLevelManager, playerLevelUnlockManager);
             levelCommand.setExecutor(executor);
             levelCommand.setTabCompleter(executor);
+        }
+
+        PluginCommand wardrobeCommand = getCommand("wardrobe");
+        if (wardrobeCommand == null) {
+            getLogger().warning("plugin.yml に wardrobe コマンドが登録されていません。");
+        } else {
+            wardrobeCommand.setExecutor(new WardrobeCommand(playerLevelUnlockManager, wardrobeManager, wardrobeGui));
         }
 
         PluginCommand rankCommand = getCommand("rank");
@@ -304,6 +328,14 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         }
     }
 
+    private void clearWardrobeCache() {
+        if (wardrobeManager != null) {
+            for (org.bukkit.entity.Player player : getServer().getOnlinePlayers()) {
+                wardrobeManager.unload(player.getUniqueId());
+            }
+        }
+    }
+
     private void closeDatabase() {
         if (databaseManager != null) {
             databaseManager.close();
@@ -314,6 +346,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     public PlayerRepository getPlayerRepository() { return playerRepository; }
     public StatsRepository getStatsRepository() { return statsRepository; }
     public PlayerLevelRepository getPlayerLevelRepository() { return playerLevelRepository; }
+    public WardrobeRepository getWardrobeRepository() { return wardrobeRepository; }
     public PlayerManager getPlayerManager() { return playerManager; }
     public CoinManager getCoinManager() { return coinManager; }
     public ActionBarSettingsManager getActionBarSettingsManager() { return actionBarSettingsManager; }
@@ -322,5 +355,6 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     public me.lrg.skyblock.core.manager.PlacedBlockTracker getPlacedBlockTracker() { return placedBlockTracker; }
     public PlayerLevelManager getPlayerLevelManager() { return playerLevelManager; }
     public PlayerLevelUnlockManager getPlayerLevelUnlockManager() { return playerLevelUnlockManager; }
+    public WardrobeManager getWardrobeManager() { return wardrobeManager; }
     public FortuneTargetSettings getFortuneTargetSettings() { return fortuneTargetSettings; }
 }
