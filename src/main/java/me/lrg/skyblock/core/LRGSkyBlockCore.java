@@ -1,5 +1,12 @@
 package me.lrg.skyblock.core;
 
+import me.lrg.skyblock.core.bazaar.command.BazaarCommand;
+import me.lrg.skyblock.core.bazaar.config.BazaarMessages;
+import me.lrg.skyblock.core.bazaar.database.BazaarSchemaMigrator;
+import me.lrg.skyblock.core.bazaar.gui.BazaarGui;
+import me.lrg.skyblock.core.bazaar.listener.BazaarListener;
+import me.lrg.skyblock.core.bazaar.manager.BazaarManager;
+import me.lrg.skyblock.core.bazaar.repository.BazaarRepository;
 import me.lrg.skyblock.core.command.ActionBarCommand;
 import me.lrg.skyblock.core.command.CoinCommand;
 import me.lrg.skyblock.core.command.FortuneGuiCommand;
@@ -59,6 +66,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private StatsRepository statsRepository;
     private PlayerLevelRepository playerLevelRepository;
     private WardrobeRepository wardrobeRepository;
+    private BazaarRepository bazaarRepository;
     private PlayerManager playerManager;
     private CoinManager coinManager;
     private ActionBarSettingsManager actionBarSettingsManager;
@@ -70,6 +78,9 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private AutoPickupManager autoPickupManager;
     private WardrobeManager wardrobeManager;
     private WardrobeGui wardrobeGui;
+    private BazaarManager bazaarManager;
+    private BazaarGui bazaarGui;
+    private BazaarMessages bazaarMessages;
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
     private FortuneGui fortuneGui;
@@ -121,6 +132,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         statsSchemaMigrator.migrate();
         new PlayerLevelSchemaMigrator(databaseManager, getLogger()).migrate();
         new WardrobeSchemaMigrator(databaseManager, getLogger()).migrate();
+        new BazaarSchemaMigrator(databaseManager, getLogger()).migrate();
     }
 
     private void setupConfigs() {
@@ -133,6 +145,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.statsRepository = new StatsRepository(databaseManager, getLogger());
         this.playerLevelRepository = new PlayerLevelRepository(databaseManager, getLogger());
         this.wardrobeRepository = new WardrobeRepository(databaseManager, getLogger());
+        this.bazaarRepository = new BazaarRepository(databaseManager, getLogger());
     }
 
     private void setupManagers() {
@@ -147,6 +160,9 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.autoPickupManager = new AutoPickupManager(playerLevelUnlockManager, new InventoryDelivery());
         this.wardrobeManager = new WardrobeManager(this, wardrobeRepository);
         this.wardrobeGui = new WardrobeGui(wardrobeManager);
+        this.bazaarManager = new BazaarManager(bazaarRepository, coinManager);
+        this.bazaarMessages = BazaarMessages.load(this);
+        this.bazaarGui = new BazaarGui(bazaarManager, bazaarMessages);
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
         this.rankNameTagManager = new RankNameTagManager(playerLevelManager);
     }
@@ -173,6 +189,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AutoPickupListener(autoPickupManager), this);
         getServer().getPluginManager().registerEvents(new WardrobePlayerListener(wardrobeManager), this);
         getServer().getPluginManager().registerEvents(new WardrobeListener(wardrobeManager, wardrobeGui), this);
+        getServer().getPluginManager().registerEvents(new BazaarListener(bazaarManager, bazaarGui, bazaarMessages), this);
         getServer().getPluginManager().registerEvents(new RankNameTagListener(rankNameTagManager), this);
     }
 
@@ -242,6 +259,13 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             getLogger().warning("plugin.yml に wardrobe コマンドが登録されていません。");
         } else {
             wardrobeCommand.setExecutor(new WardrobeCommand(playerLevelUnlockManager, wardrobeManager, wardrobeGui));
+        }
+
+        PluginCommand bazaarCommand = getCommand("bazaar");
+        if (bazaarCommand == null) {
+            getLogger().warning("plugin.yml に bazaar コマンドが登録されていません。");
+        } else {
+            bazaarCommand.setExecutor(new BazaarCommand(bazaarGui, playerLevelUnlockManager, bazaarMessages));
         }
 
         PluginCommand rankCommand = getCommand("rank");
