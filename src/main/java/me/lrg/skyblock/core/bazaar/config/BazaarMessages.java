@@ -36,7 +36,7 @@ public final class BazaarMessages {
         return text("bazaar.categories." + id.toLowerCase());
     }
 
-    private static String color(String value) {
+    public static String color(String value) {
         return ChatColor.translateAlternateColorCodes('&', value == null ? "" : value);
     }
 }
