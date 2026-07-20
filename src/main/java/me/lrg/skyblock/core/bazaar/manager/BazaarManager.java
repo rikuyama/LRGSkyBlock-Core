@@ -69,6 +69,12 @@ public final class BazaarManager {
         return amount;
     }
 
+    public int maxAffordable(Player player, BazaarItem item) {
+        long coins = coinManager.getCoins(player.getUniqueId()).orElse(0L);
+        if (item.buyPrice() <= 0L) return 0;
+        return (int) Math.min(Integer.MAX_VALUE, coins / item.buyPrice());
+    }
+
     public int countMatching(Player player, ItemStack template) {
         int total = 0;
         for (ItemStack stack : player.getInventory().getStorageContents()) if (stack != null && stack.isSimilar(template)) total += stack.getAmount();
