@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.7.2
+version: 0.7.3
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "26.2"
 author: LRG
@@ -33,6 +33,10 @@ commands:
     description: Wardrobeを開くコマンド
     usage: /wardrobe
     aliases: [wd]
+  bazaar:
+    description: Bazaarを開く・管理するコマンド
+    usage: /bazaar [admin]
+    aliases: [bz]
   rank:
     description: ランク表示を確認・デバッグするコマンド
     usage: /rank [player] | /rank <set|reset> <player> [rank]
@@ -60,6 +64,10 @@ permissions:
     default: op
   lrgskyblock.command.wardrobe:
     default: true
+  lrgskyblock.command.bazaar:
+    default: true
+  lrgskyblock.command.bazaar.admin:
+    default: op
   lrgskyblock.command.rank:
     default: true
   lrgskyblock.command.rank.admin:
