@@ -1,0 +1,9 @@
+# Bazaar掲載テンプレート例。
+# 実際の登録・削除・価格変更はゲーム内で /bazaar admin から行えます。
+# 新規登録時の初期価格は購入10 Coins / 売却5 Coinsです。
+# カテゴリは素材名から MINING / FARMING / FORAGING / NETHER / OTHER を自動判定します。
+templates:
+  mining: [COBBLESTONE, COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, EMERALD, REDSTONE]
+  farming: [WHEAT, CARROT, POTATO, MELON_SLICE, PUMPKIN, SUGAR_CANE]
+  foraging: [OAK_LOG, SPRUCE_LOG, BIRCH_LOG, JUNGLE_LOG, ACACIA_LOG, DARK_OAK_LOG]
+  nether: [NETHERRACK, BLAZE_ROD, MAGMA_CREAM, NETHER_WART]
