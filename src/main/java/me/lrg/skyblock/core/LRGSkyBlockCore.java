@@ -7,6 +7,7 @@ import me.lrg.skyblock.core.bazaar.gui.BazaarGui;
 import me.lrg.skyblock.core.bazaar.listener.BazaarListener;
 import me.lrg.skyblock.core.bazaar.manager.BazaarManager;
 import me.lrg.skyblock.core.bazaar.repository.BazaarRepository;
+import me.lrg.skyblock.core.bazaar.order.repository.BazaarOrderRepository;
 import me.lrg.skyblock.core.command.ActionBarCommand;
 import me.lrg.skyblock.core.command.CoinCommand;
 import me.lrg.skyblock.core.command.FortuneGuiCommand;
@@ -67,6 +68,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private PlayerLevelRepository playerLevelRepository;
     private WardrobeRepository wardrobeRepository;
     private BazaarRepository bazaarRepository;
+    private BazaarOrderRepository bazaarOrderRepository;
     private PlayerManager playerManager;
     private CoinManager coinManager;
     private ActionBarSettingsManager actionBarSettingsManager;
@@ -146,6 +148,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.playerLevelRepository = new PlayerLevelRepository(databaseManager, getLogger());
         this.wardrobeRepository = new WardrobeRepository(databaseManager, getLogger());
         this.bazaarRepository = new BazaarRepository(databaseManager, getLogger());
+        this.bazaarOrderRepository = new BazaarOrderRepository(databaseManager, getLogger());
     }
 
     private void setupManagers() {
@@ -160,7 +163,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.autoPickupManager = new AutoPickupManager(playerLevelUnlockManager, new InventoryDelivery());
         this.wardrobeManager = new WardrobeManager(this, wardrobeRepository);
         this.wardrobeGui = new WardrobeGui(wardrobeManager);
-        this.bazaarManager = new BazaarManager(bazaarRepository, coinManager);
+        this.bazaarManager = new BazaarManager(bazaarRepository, bazaarOrderRepository, coinManager);
         this.bazaarMessages = BazaarMessages.load(this);
         this.bazaarGui = new BazaarGui(bazaarManager, bazaarMessages);
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
@@ -189,7 +192,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AutoPickupListener(autoPickupManager), this);
         getServer().getPluginManager().registerEvents(new WardrobePlayerListener(wardrobeManager), this);
         getServer().getPluginManager().registerEvents(new WardrobeListener(wardrobeManager, wardrobeGui), this);
-        getServer().getPluginManager().registerEvents(new BazaarListener(bazaarManager, bazaarGui, bazaarMessages), this);
+        getServer().getPluginManager().registerEvents(new BazaarListener(this, bazaarManager, bazaarGui, bazaarMessages), this);
         getServer().getPluginManager().registerEvents(new RankNameTagListener(rankNameTagManager), this);
     }
 

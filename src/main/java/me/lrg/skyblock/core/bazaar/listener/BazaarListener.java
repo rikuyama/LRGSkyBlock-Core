@@ -5,6 +5,8 @@ import me.lrg.skyblock.core.bazaar.gui.BazaarGui;
 import me.lrg.skyblock.core.bazaar.gui.BazaarHolder;
 import me.lrg.skyblock.core.bazaar.manager.BazaarManager;
 import me.lrg.skyblock.core.bazaar.model.BazaarItem;
+import me.lrg.skyblock.core.bazaar.order.model.BazaarItemClaim;
+import me.lrg.skyblock.core.bazaar.order.model.BazaarOrder;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -19,11 +21,14 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class BazaarListener implements Listener {
+    private record PendingOrder(String itemId, BazaarHolder.Action action) {}
+
     private final JavaPlugin plugin;
     private final BazaarManager manager;
     private final BazaarGui gui;
     private final BazaarMessages messages;
     private final Set<UUID> awaitingSearch = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, PendingOrder> awaitingOrder = new ConcurrentHashMap<>();
 
     public BazaarListener(JavaPlugin plugin, BazaarManager manager, BazaarGui gui, BazaarMessages messages) {
         this.plugin = plugin;
@@ -39,13 +44,14 @@ public final class BazaarListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= event.getInventory().getSize()) return;
-
         switch (holder.screen()) {
             case HOME -> clickHome(player, slot);
             case PRODUCTS -> clickProducts(player, holder, slot);
             case DETAIL -> clickDetail(player, holder, slot);
             case QUANTITY -> clickQuantity(player, holder, slot);
             case CONFIRM -> clickConfirm(player, holder, slot);
+            case MY_ORDERS -> clickMyOrders(player, slot);
+            case CLAIMS -> clickClaims(player, slot);
             case ADMIN -> clickAdmin(player, event, slot);
         }
     }
@@ -55,6 +61,8 @@ public final class BazaarListener implements Listener {
         if (categories.containsKey(slot)) gui.openProducts(player, categories.get(slot), 0, "");
         else if (slot == 31) gui.openProducts(player, null, 0, "");
         else if (slot == 45) beginSearch(player);
+        else if (slot == 47) gui.openMyOrders(player);
+        else if (slot == 51) gui.openClaims(player);
         else if (slot == 49) player.closeInventory();
     }
 
@@ -73,9 +81,11 @@ public final class BazaarListener implements Listener {
     private void clickDetail(Player player, BazaarHolder holder, int slot) {
         BazaarItem item = manager.find(holder.itemId()).orElse(null);
         if (item == null) { gui.openHome(player); return; }
-        if (slot == 11) gui.openQuantity(player, item, BazaarHolder.Action.BUY, holder.category(), holder.page(), holder.query());
-        else if (slot == 15) gui.openQuantity(player, item, BazaarHolder.Action.SELL, holder.category(), holder.page(), holder.query());
-        else if (slot == 22) gui.openProducts(player, holder.category(), holder.page(), holder.query());
+        if (slot == 10) gui.openQuantity(player, item, BazaarHolder.Action.INSTANT_BUY, holder.category(), holder.page(), holder.query());
+        else if (slot == 16) gui.openQuantity(player, item, BazaarHolder.Action.INSTANT_SELL, holder.category(), holder.page(), holder.query());
+        else if (slot == 20) beginOrder(player, item, BazaarHolder.Action.CREATE_BUY);
+        else if (slot == 24) beginOrder(player, item, BazaarHolder.Action.CREATE_SELL);
+        else if (slot == 31) gui.openProducts(player, holder.category(), holder.page(), holder.query());
     }
 
     private void clickQuantity(Player player, BazaarHolder holder, int slot) {
@@ -85,11 +95,11 @@ public final class BazaarListener implements Listener {
             case 11 -> 1;
             case 13 -> 16;
             case 15 -> 64;
-            case 31 -> holder.action() == BazaarHolder.Action.BUY ? manager.maxAffordable(player, item) : manager.countMatching(player, item.template());
+            case 31 -> holder.action() == BazaarHolder.Action.INSTANT_BUY ? manager.maxInstantBuy(player, item) : Math.min(manager.countMatching(player, item.template()), manager.availableVolume(item.id(), me.lrg.skyblock.core.bazaar.order.model.BazaarOrderSide.BUY));
             default -> 0;
         };
         if (slot == 40) { gui.openDetail(player, item, holder.category(), holder.page(), holder.query()); return; }
-        if (amount <= 0) { player.sendMessage(messages.text(holder.action() == BazaarHolder.Action.BUY ? "bazaar.messages.buy-failed" : "bazaar.messages.sell-failed")); return; }
+        if (amount <= 0) { player.sendMessage(messages.text("bazaar.messages.no-market-volume")); return; }
         gui.openConfirm(player, item, holder.action(), amount, holder.category(), holder.page(), holder.query());
     }
 
@@ -98,15 +108,40 @@ public final class BazaarListener implements Listener {
         if (item == null) { gui.openHome(player); return; }
         if (slot == 15) { gui.openQuantity(player, item, holder.action(), holder.category(), holder.page(), holder.query()); return; }
         if (slot != 11) return;
-        if (holder.action() == BazaarHolder.Action.BUY) {
-            if (manager.buy(player, item, holder.amount())) player.sendMessage(messages.text("bazaar.messages.bought", Map.of("id", item.id(), "amount", Integer.toString(holder.amount()))));
-            else player.sendMessage(messages.text("bazaar.messages.buy-failed"));
-        } else {
-            int sold = manager.sell(player, item, holder.amount());
-            if (sold > 0) player.sendMessage(messages.text("bazaar.messages.sold", Map.of("id", item.id(), "amount", Integer.toString(sold))));
-            else player.sendMessage(messages.text("bazaar.messages.sell-failed"));
-        }
+        BazaarManager.TradeResult result = holder.action() == BazaarHolder.Action.INSTANT_BUY
+                ? manager.instantBuy(player, item, holder.amount())
+                : manager.instantSell(player, item, holder.amount());
+        if (result.success()) {
+            player.sendMessage(messages.text(holder.action() == BazaarHolder.Action.INSTANT_BUY ? "bazaar.messages.instant-bought" : "bazaar.messages.instant-sold",
+                    Map.of("id", item.id(), "amount", Integer.toString(result.amount()), "coins", Long.toString(result.totalCoins()))));
+        } else player.sendMessage(messages.text("bazaar.messages.trade-failed"));
         gui.openDetail(player, item, holder.category(), holder.page(), holder.query());
+    }
+
+    private void clickMyOrders(Player player, int slot) {
+        if (slot == 49) { gui.openHome(player); return; }
+        List<BazaarOrder> orders = manager.playerOrders(player.getUniqueId());
+        if (slot < 0 || slot >= Math.min(45, orders.size())) return;
+        BazaarOrder order = orders.get(slot);
+        if (manager.cancelOrder(player, order.id())) player.sendMessage(messages.text("bazaar.messages.order-cancelled", Map.of("id", Long.toString(order.id()))));
+        else player.sendMessage(messages.text("bazaar.messages.order-cancel-failed"));
+        gui.openMyOrders(player);
+    }
+
+    private void clickClaims(Player player, int slot) {
+        if (slot == 49) { gui.openHome(player); return; }
+        if (slot == 4) {
+            long coins = manager.claimCoins(player);
+            player.sendMessage(messages.text(coins > 0 ? "bazaar.messages.coins-claimed" : "bazaar.messages.nothing-to-claim", Map.of("coins", Long.toString(coins))));
+            gui.openClaims(player); return;
+        }
+        int index = slot - 9;
+        List<BazaarItemClaim> claims = manager.itemClaims(player.getUniqueId());
+        if (index < 0 || index >= claims.size()) return;
+        BazaarItemClaim claim = claims.get(index);
+        int amount = manager.claimItems(player, claim.itemId());
+        player.sendMessage(messages.text(amount > 0 ? "bazaar.messages.items-claimed" : "bazaar.messages.claim-inventory-full", Map.of("id", claim.itemId(), "amount", Integer.toString(amount))));
+        gui.openClaims(player);
     }
 
     private void clickAdmin(Player player, InventoryClickEvent event, int slot) {
@@ -130,25 +165,59 @@ public final class BazaarListener implements Listener {
 
     private void beginSearch(Player player) {
         awaitingSearch.add(player.getUniqueId());
+        awaitingOrder.remove(player.getUniqueId());
         player.closeInventory();
         player.sendMessage(messages.text("bazaar.messages.search-prompt"));
+    }
+
+    private void beginOrder(Player player, BazaarItem item, BazaarHolder.Action action) {
+        awaitingOrder.put(player.getUniqueId(), new PendingOrder(item.id(), action));
+        awaitingSearch.remove(player.getUniqueId());
+        player.closeInventory();
+        player.sendMessage(messages.text("bazaar.messages.order-input-prompt"));
     }
 
     @SuppressWarnings("deprecation")
     @EventHandler
     public void onChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
-        if (!awaitingSearch.remove(player.getUniqueId())) return;
+        UUID uuid = player.getUniqueId();
+        PendingOrder pending = awaitingOrder.remove(uuid);
+        if (pending != null) {
+            event.setCancelled(true);
+            String input = event.getMessage().trim();
+            Bukkit.getScheduler().runTask(plugin, () -> handleOrderInput(player, pending, input));
+            return;
+        }
+        if (!awaitingSearch.remove(uuid)) return;
         event.setCancelled(true);
         String query = event.getMessage().trim();
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (query.equalsIgnoreCase("cancel") || query.equalsIgnoreCase("キャンセル")) {
-                player.sendMessage(messages.text("bazaar.messages.search-cancelled"));
-                gui.openHome(player);
-                return;
-            }
+            if (isCancel(query)) { player.sendMessage(messages.text("bazaar.messages.search-cancelled")); gui.openHome(player); return; }
             player.sendMessage(messages.text("bazaar.messages.search-result", Map.of("query", query)));
             gui.openProducts(player, null, 0, query);
         });
     }
+
+    private void handleOrderInput(Player player, PendingOrder pending, String input) {
+        BazaarItem item = manager.find(pending.itemId()).orElse(null);
+        if (item == null) { player.sendMessage(messages.text("bazaar.messages.item-missing")); return; }
+        if (isCancel(input)) { player.sendMessage(messages.text("bazaar.messages.order-input-cancelled")); gui.openDetail(player, item, null, 0, ""); return; }
+        String[] parts = input.split("\\s+");
+        if (parts.length != 2) { player.sendMessage(messages.text("bazaar.messages.order-input-invalid")); gui.openDetail(player, item, null, 0, ""); return; }
+        try {
+            long price = Long.parseLong(parts[0]);
+            int amount = Integer.parseInt(parts[1]);
+            boolean success = pending.action() == BazaarHolder.Action.CREATE_BUY
+                    ? manager.createBuyOrder(player, item, price, amount)
+                    : manager.createSellOrder(player, item, price, amount);
+            player.sendMessage(messages.text(success ? "bazaar.messages.order-created" : "bazaar.messages.order-create-failed",
+                    Map.of("side", pending.action() == BazaarHolder.Action.CREATE_BUY ? "買い" : "売り", "id", item.id(), "price", Long.toString(price), "amount", Integer.toString(amount))));
+        } catch (NumberFormatException exception) {
+            player.sendMessage(messages.text("bazaar.messages.order-input-invalid"));
+        }
+        gui.openDetail(player, item, null, 0, "");
+    }
+
+    private boolean isCancel(String input) { return input.equalsIgnoreCase("cancel") || input.equalsIgnoreCase("キャンセル"); }
 }
