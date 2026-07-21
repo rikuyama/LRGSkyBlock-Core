@@ -14,135 +14,505 @@ import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public final class BazaarGui {
-    public static final List<Integer> PRODUCT_SLOTS = List.of(10,11,12,13,14,15,16,19,20,21,22,23,24,25,28,29,30,31,32,33,34,37,38,39,40,41,42,43);
-    private static final List<String> CATEGORIES = List.of("FARMING", "MINING", "COMBAT", "FORAGING", "OTHER");
-    private static final List<Integer> CATEGORY_SLOTS = List.of(11,12,13,14,15);
+    public static final List<Integer> PRODUCT_SLOTS = BazaarLayout.PRODUCT_SLOTS;
+
     private final BazaarManager manager;
     private final BazaarMessages messages;
+    private final ConcurrentMap<UUID, Boolean> advancedModeByPlayer = new ConcurrentHashMap<>();
 
-    public BazaarGui(BazaarManager manager, BazaarMessages messages) { this.manager = manager; this.messages = messages; }
-    public void openPlayer(Player player) { openHome(player); }
+    public BazaarGui(BazaarManager manager, BazaarMessages messages) {
+        this.manager = manager;
+        this.messages = messages;
+    }
+
+    public void openPlayer(Player player) {
+        openProducts(player, "FARMING", 0, "");
+    }
 
     public void openHome(Player player) {
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.HOME), 54, messages.text("bazaar.gui.home-title"));
-        fillBorder(inv);
-        for (int i = 0; i < CATEGORIES.size(); i++) inv.setItem(CATEGORY_SLOTS.get(i), categoryIcon(CATEGORIES.get(i)));
-        inv.setItem(31, named(Material.CHEST, messages.text("bazaar.gui.all-products"), List.of(messages.text("bazaar.gui.click-open"))));
-        inv.setItem(45, named(Material.OAK_SIGN, messages.text("bazaar.gui.search-name"), List.of(messages.text("bazaar.gui.search-lore"))));
-        inv.setItem(47, named(Material.BOOK, messages.text("bazaar.gui.my-orders"), List.of(messages.text("bazaar.gui.click-open"))));
-        inv.setItem(51, named(Material.ENDER_CHEST, messages.text("bazaar.gui.claims"), List.of(messages.text("bazaar.gui.claim-summary", Map.of("coins", Long.toString(manager.claimableCoins(player.getUniqueId())), "items", Integer.toString(manager.itemClaims(player.getUniqueId()).size()))), messages.text("bazaar.gui.click-open"))));
-        inv.setItem(49, named(Material.BARRIER, messages.text("bazaar.gui.close"), List.of()));
-        player.openInventory(inv);
+        openProducts(player, "FARMING", 0, "");
     }
 
     public void openProducts(Player player, String category, int page, String query) {
-        List<BazaarItem> filtered = filtered(category, query);
-        int pages = Math.max(1, (filtered.size() + PRODUCT_SLOTS.size() - 1) / PRODUCT_SLOTS.size());
+        String selectedCategory = normalizeCategory(category);
+        List<BazaarItem> products = filtered(selectedCategory, query);
+        int pages = Math.max(1, (products.size() + PRODUCT_SLOTS.size() - 1) / PRODUCT_SLOTS.size());
         int safePage = Math.min(Math.max(0, page), pages - 1);
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.PRODUCTS, category, null, safePage, query, null, 0), 54,
-                messages.text("bazaar.gui.products-title", Map.of("category", category == null ? messages.text("bazaar.gui.all-products") : messages.category(category), "page", Integer.toString(safePage + 1), "pages", Integer.toString(pages))));
-        fillBorder(inv);
+        BazaarHolder holder = new BazaarHolder(BazaarHolder.Screen.PRODUCTS, selectedCategory, null,
+                safePage, query, null, 0, 0L, 0L);
+        Inventory inventory = Bukkit.createInventory(holder, 54,
+                "§8Bazaar ➜ " + categoryName(selectedCategory));
+        fill(inventory, paneFor(selectedCategory));
+
+        for (Map.Entry<Integer, String> entry : BazaarLayout.CATEGORY_BY_SLOT.entrySet()) {
+            inventory.setItem(entry.getKey(), categoryIcon(entry.getValue(), selectedCategory.equals(entry.getValue())));
+        }
+
         int start = safePage * PRODUCT_SLOTS.size();
-        for (int i = 0; i < PRODUCT_SLOTS.size() && start + i < filtered.size(); i++) inv.setItem(PRODUCT_SLOTS.get(i), productDisplay(filtered.get(start + i)));
-        if (safePage > 0) inv.setItem(45, named(Material.ARROW, messages.text("bazaar.gui.previous-page"), List.of()));
-        inv.setItem(46, named(Material.OAK_SIGN, messages.text("bazaar.gui.search-name"), List.of(query.isBlank() ? messages.text("bazaar.gui.search-lore") : messages.text("bazaar.gui.search-current", Map.of("query", query)))));
-        inv.setItem(49, named(Material.ARROW, messages.text("bazaar.gui.back"), List.of()));
-        if (safePage + 1 < pages) inv.setItem(53, named(Material.ARROW, messages.text("bazaar.gui.next-page"), List.of()));
-        player.openInventory(inv);
+        for (int index = 0; index < PRODUCT_SLOTS.size() && start + index < products.size(); index++) {
+            inventory.setItem(PRODUCT_SLOTS.get(index), productDisplay(products.get(start + index), isAdvancedMode(player)));
+        }
+
+        inventory.setItem(BazaarLayout.SEARCH, named(Material.OAK_SIGN, "§aSearch", List.of(
+                query == null || query.isBlank() ? "§7Search Bazaar products." : "§7Current: §f" + query,
+                "", "§eClick to search!")));
+        inventory.setItem(BazaarLayout.SELL_INVENTORY, named(Material.HOPPER, "§6Sell Inventory Now", List.of(
+                "§7Instantly sells all eligible Bazaar", "§7items in your inventory.", "", "§eClick to sell!")));
+        inventory.setItem(BazaarLayout.SELL_SACKS, named(Material.BUNDLE, "§6Sell Sacks Now", List.of(
+                "§7Sack integration is not installed.", "§8This button is reserved for it.")));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cClose", List.of()));
+        inventory.setItem(BazaarLayout.MANAGE_ORDERS, named(Material.BOOK, "§aManage Orders", List.of(
+                "§7Open orders: §e" + manager.playerOrders(player.getUniqueId()).size(),
+                "§7Claimable coins: §6" + format(manager.claimableCoins(player.getUniqueId())),
+                "", "§eClick to manage!")));
+        boolean advancedMode = isAdvancedMode(player);
+        inventory.setItem(BazaarLayout.VIEW_MODE, named(
+                advancedMode ? Material.COMPARATOR : Material.REDSTONE_TORCH,
+                advancedMode ? "§aAdvanced Mode" : "§eDirect Mode",
+                List.of(
+                        advancedMode
+                                ? "§7Prices and live order volume are shown."
+                                : "§7Only essential buy and sell prices are shown.",
+                        "",
+                        "§eClick to switch mode!"
+                )
+        ));
+
+        if (safePage > 0) inventory.setItem(46, named(Material.ARROW, "§aPrevious Page", List.of()));
+        if (safePage + 1 < pages) inventory.setItem(53, named(Material.ARROW, "§aNext Page", List.of()));
+        player.openInventory(inventory);
     }
 
     public void openDetail(Player player, BazaarItem item, String category, int page, String query) {
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.DETAIL, category, item.id(), page, query, null, 0), 36,
-                messages.text("bazaar.gui.detail-title", Map.of("item", displayName(item.template()))));
-        fill(inv, Material.BLACK_STAINED_GLASS_PANE);
-        inv.setItem(13, productDisplay(item));
-        inv.setItem(10, action(Material.EMERALD_BLOCK, "bazaar.gui.instant-buy", manager.bestSellPrice(item.id()).orElse(0), manager.availableVolume(item.id(), BazaarOrderSide.SELL)));
-        inv.setItem(16, action(Material.GOLD_BLOCK, "bazaar.gui.instant-sell", manager.bestBuyPrice(item.id()).orElse(0), manager.availableVolume(item.id(), BazaarOrderSide.BUY)));
-        inv.setItem(20, named(Material.LIME_DYE, messages.text("bazaar.gui.create-buy-order"), List.of(messages.text("bazaar.gui.order-input-lore"), messages.text("bazaar.gui.click-open"))));
-        inv.setItem(24, named(Material.ORANGE_DYE, messages.text("bazaar.gui.create-sell-order"), List.of(messages.text("bazaar.gui.owned", Map.of("amount", Integer.toString(manager.countMatching(player, item.template())))), messages.text("bazaar.gui.order-input-lore"), messages.text("bazaar.gui.click-open"))));
-        inv.setItem(31, named(Material.ARROW, messages.text("bazaar.gui.back"), List.of()));
-        player.openInventory(inv);
+        BazaarHolder holder = new BazaarHolder(BazaarHolder.Screen.DETAIL, category, item.id(), page, query,
+                null, 0, 0L, 0L);
+        Inventory inventory = Bukkit.createInventory(holder, 54, "§8" + displayName(item.template()));
+        fill(inventory, Material.BLACK_STAINED_GLASS_PANE);
+
+        inventory.setItem(BazaarLayout.INSTANT_BUY, marketAction(
+                Material.EMERALD_BLOCK, "§aBuy Instantly", manager.bestSellPrice(item.id()).orElse(0L),
+                manager.availableVolume(item.id(), BazaarOrderSide.SELL)));
+        inventory.setItem(BazaarLayout.PRODUCT_CENTER, productDisplay(item));
+        inventory.setItem(BazaarLayout.INSTANT_SELL, marketAction(
+                Material.GOLD_BLOCK, "§6Sell Instantly", manager.bestBuyPrice(item.id()).orElse(0L),
+                manager.availableVolume(item.id(), BazaarOrderSide.BUY)));
+        inventory.setItem(BazaarLayout.CREATE_BUY_ORDER, named(Material.LIME_DYE, "§aCreate Buy Order", List.of(
+                "§7Choose an amount and price.", "§7Your coins are held until filled", "§7or the order is cancelled.", "", "§eClick to create!")));
+        inventory.setItem(BazaarLayout.CREATE_SELL_OFFER, named(Material.ORANGE_DYE, "§6Create Sell Offer", List.of(
+                "§7Owned: §e" + manager.countMatching(player, item.template()),
+                "§7Choose an amount and price.", "", "§eClick to create!")));
+        inventory.setItem(BazaarLayout.BACK_LEFT, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cClose", List.of()));
+        inventory.setItem(BazaarLayout.MANAGE_ORDERS, named(Material.BOOK, "§aManage Orders", List.of("§eClick to manage!")));
+        inventory.setItem(BazaarLayout.VIEW_GRAPHS, named(Material.PAINTING, "§eView Graphs", List.of(
+                "§7Displays the live order-book summary.", "", "§eClick to view!")));
+        inventory.setItem(BazaarLayout.INSTA_SELL_IGNORE, named(Material.REDSTONE_TORCH, "§cInstasell Ignore", List.of(
+                "§7Ignore-list persistence is reserved", "§7for the settings update.")));
+        player.openInventory(inventory);
     }
 
-    public void openQuantity(Player player, BazaarItem item, BazaarHolder.Action action, String category, int page, String query) {
-        String titleKey = action == BazaarHolder.Action.INSTANT_BUY ? "bazaar.gui.buy-title" : "bazaar.gui.sell-title";
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.QUANTITY, category, item.id(), page, query, action, 0), 45,
-                messages.text(titleKey, Map.of("item", displayName(item.template()))));
-        fill(inv, Material.BLACK_STAINED_GLASS_PANE);
-        int[] amounts = {1,16,64}; int[] slots = {11,13,15};
-        for (int i = 0; i < amounts.length; i++) inv.setItem(slots[i], quantityIcon(action, amounts[i]));
-        int max = action == BazaarHolder.Action.INSTANT_BUY ? manager.maxInstantBuy(player, item) : Math.min(manager.countMatching(player, item.template()), manager.availableVolume(item.id(), BazaarOrderSide.BUY));
-        inv.setItem(31, quantityIcon(action, Math.max(1, max), messages.text(action == BazaarHolder.Action.INSTANT_BUY ? "bazaar.gui.maximum-buy" : "bazaar.gui.sell-all")));
-        inv.setItem(40, named(Material.ARROW, messages.text("bazaar.gui.back"), List.of()));
-        player.openInventory(inv);
+    public void openQuantity(Player player, BazaarItem item, BazaarHolder.Action action,
+                             String category, int page, String query) {
+        BazaarHolder holder = new BazaarHolder(BazaarHolder.Screen.QUANTITY, category, item.id(), page, query,
+                action, 0, 0L, 0L);
+        String title = action == BazaarHolder.Action.INSTANT_BUY ? "§8Instant Buy" : "§8Instant Sell";
+        Inventory inventory = Bukkit.createInventory(holder, 54, title + " ➜ " + displayName(item.template()));
+        fill(inventory, Material.BLACK_STAINED_GLASS_PANE);
+        inventory.setItem(BazaarLayout.QUANTITY_ONE, quantityButton(action, 1, "§a" + actionVerb(action) + " only one!"));
+        inventory.setItem(BazaarLayout.QUANTITY_STACK, quantityButton(action, 64, "§a" + actionVerb(action) + " a stack!"));
+        int maximum = action == BazaarHolder.Action.INSTANT_BUY
+                ? manager.maxInstantBuy(player, item)
+                : Math.min(manager.countMatching(player, item.template()),
+                manager.availableVolume(item.id(), BazaarOrderSide.BUY));
+        inventory.setItem(BazaarLayout.QUANTITY_FILL, quantityButton(action, Math.max(1, maximum),
+                action == BazaarHolder.Action.INSTANT_BUY ? "§aFill my inventory!" : "§6Sell all available!"));
+        inventory.setItem(BazaarLayout.QUANTITY_CUSTOM, named(Material.OAK_SIGN, "§eCustom Amount", List.of(
+                "§7Enter an exact amount in chat.", "", "§eClick to enter!")));
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cClose", List.of()));
+        player.openInventory(inventory);
     }
 
-    public void openConfirm(Player player, BazaarItem item, BazaarHolder.Action action, int amount, String category, int page, String query) {
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.CONFIRM, category, item.id(), page, query, action, amount), 27, messages.text("bazaar.gui.confirm-title"));
-        fill(inv, Material.BLACK_STAINED_GLASS_PANE);
-        inv.setItem(11, named(Material.LIME_TERRACOTTA, messages.text("bazaar.gui.confirm"), List.of(messages.text("bazaar.gui.amount", Map.of("amount", Integer.toString(amount))), messages.text("bazaar.gui.market-order-warning"))));
-        ItemStack center = item.template(); center.setAmount(Math.min(center.getMaxStackSize(), Math.max(1, amount))); inv.setItem(13, center);
-        inv.setItem(15, named(Material.RED_TERRACOTTA, messages.text("bazaar.gui.cancel"), List.of()));
-        player.openInventory(inv);
+    public void openOrderAmount(Player player, BazaarItem item, BazaarHolder.Action action,
+                                String category, int page, String query) {
+        BazaarHolder holder = new BazaarHolder(BazaarHolder.Screen.ORDER_AMOUNT, category, item.id(), page, query,
+                action, 0, 0L, 0L);
+        Inventory inventory = Bukkit.createInventory(holder, 54, "§8How many do you want?");
+        fill(inventory, Material.BLACK_STAINED_GLASS_PANE);
+        inventory.setItem(BazaarLayout.ORDER_AMOUNT_4, orderAmountButton(4, "§aOrder 4x"));
+        inventory.setItem(BazaarLayout.ORDER_AMOUNT_10, orderAmountButton(10, "§aOrder 10x"));
+        inventory.setItem(BazaarLayout.ORDER_AMOUNT_64, orderAmountButton(64, "§aOrder 64x"));
+        inventory.setItem(BazaarLayout.ORDER_AMOUNT_CUSTOM, named(Material.OAK_SIGN, "§eCustom Amount", List.of(
+                "§7Enter the amount in chat.", "", "§eClick to enter!")));
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cClose", List.of()));
+        player.openInventory(inventory);
+    }
+
+    public void openPriceSelection(Player player, BazaarItem item, BazaarHolder.Action action, int amount,
+                                   String category, int page, String query) {
+        BazaarHolder holder = new BazaarHolder(BazaarHolder.Screen.PRICE, category, item.id(), page, query,
+                action, amount, 0L, 0L);
+        boolean buy = action == BazaarHolder.Action.CREATE_BUY;
+        Inventory inventory = Bukkit.createInventory(holder, 54,
+                buy ? "§8How much do you want to pay?" : "§8At what price are you selling?");
+        fill(inventory, Material.BLACK_STAINED_GLASS_PANE);
+
+        long top = buy ? manager.bestBuyPrice(item.id()).orElse(manager.referenceSellPrice(item))
+                : manager.bestSellPrice(item.id()).orElse(manager.referenceBuyPrice(item));
+        long improved = buy ? safeAdd(top, 1L) : Math.max(1L, top - 1L);
+        long buyTop = manager.bestBuyPrice(item.id()).orElse(manager.referenceSellPrice(item));
+        long sellTop = manager.bestSellPrice(item.id()).orElse(manager.referenceBuyPrice(item));
+        long spread = Math.max(1L, buyTop + Math.max(0L, sellTop - buyTop) / 2L);
+
+        inventory.setItem(BazaarLayout.PRICE_TOP, priceButton(top,
+                buy ? "§aSame as Top Order" : "§6Same as Best Offer"));
+        inventory.setItem(BazaarLayout.PRICE_IMPROVE, priceButton(improved,
+                buy ? "§aTop Order +1" : "§6Best Offer -1"));
+        inventory.setItem(BazaarLayout.PRICE_SPREAD, priceButton(spread,
+                buy ? "§e5% of Spread" : "§e10% of Spread"));
+        inventory.setItem(BazaarLayout.PRICE_CUSTOM, named(Material.OAK_SIGN, "§eCustom Price", List.of(
+                "§7Enter a price per item in chat.", "", "§eClick to enter!")));
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cCancel Order", List.of()));
+        player.openInventory(inventory);
+    }
+
+    public void openConfirm(Player player, BazaarItem item, BazaarHolder.Action action, int amount, long price,
+                            String category, int page, String query) {
+        BazaarHolder holder = new BazaarHolder(BazaarHolder.Screen.CONFIRM, category, item.id(), page, query,
+                action, amount, price, 0L);
+        Inventory inventory = Bukkit.createInventory(holder, 54,
+                action == BazaarHolder.Action.CREATE_BUY ? "§8Confirm Buy Order" :
+                        action == BazaarHolder.Action.CREATE_SELL ? "§8Confirm Sell Offer" : "§8Are you sure?");
+        fill(inventory, Material.BLACK_STAINED_GLASS_PANE);
+        ItemStack center = item.template();
+        center.setAmount(Math.min(center.getMaxStackSize(), Math.max(1, amount)));
+        inventory.setItem(13, center);
+        long total = safeMultiply(price, amount);
+        inventory.setItem(29, named(Material.LIME_TERRACOTTA, "§aConfirm", List.of(
+                "§7Amount: §e" + format(amount),
+                "§7Price each: §6" + format(price),
+                "§7Total: §6" + format(total) + " Coins",
+                "", "§eClick to confirm!")));
+        inventory.setItem(33, named(Material.RED_TERRACOTTA, "§cCancel", List.of()));
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        player.openInventory(inventory);
     }
 
     public void openMyOrders(Player player) {
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.MY_ORDERS), 54, messages.text("bazaar.gui.my-orders-title"));
+        Inventory inventory = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.MY_ORDERS), 54, "§8Manage Orders");
+        fill(inventory, Material.GRAY_STAINED_GLASS_PANE);
         List<BazaarOrder> orders = manager.playerOrders(player.getUniqueId());
-        for (int i = 0; i < Math.min(45, orders.size()); i++) {
-            BazaarOrder order = orders.get(i); BazaarItem item = manager.find(order.itemId()).orElse(null); if (item == null) continue;
-            ItemStack stack = item.template(); ItemMeta meta = stack.getItemMeta();
-            meta.setDisplayName(BazaarMessages.color((order.side() == BazaarOrderSide.BUY ? "&a買い注文: " : "&6売り注文: ") + displayName(stack)));
-            meta.setLore(List.of(messages.text("bazaar.gui.order-id", Map.of("id", Long.toString(order.id()))), messages.text("bazaar.gui.order-price", Map.of("price", Long.toString(order.price()))), messages.text("bazaar.gui.order-remaining", Map.of("amount", Integer.toString(order.remainingAmount()))), messages.text("bazaar.gui.click-cancel-order")));
-            stack.setItemMeta(meta); inv.setItem(i, stack);
+        for (int index = 0; index < Math.min(PRODUCT_SLOTS.size(), orders.size()); index++) {
+            BazaarOrder order = orders.get(index);
+            BazaarItem item = manager.find(order.itemId()).orElse(null);
+            if (item == null) continue;
+            ItemStack stack = item.template();
+            ItemMeta meta = stack.getItemMeta();
+            meta.setDisplayName((order.side() == BazaarOrderSide.BUY ? "§aBuy Order: " : "§6Sell Offer: ") + displayName(stack));
+            int completed = order.originalAmount() - order.remainingAmount();
+            double percent = order.originalAmount() <= 0 ? 0.0D : completed * 100.0D / order.originalAmount();
+            meta.setLore(List.of(
+                    "§7Order ID: §f" + order.id(),
+                    "§7Price: §6" + format(order.price()) + " each",
+                    "§7Remaining: §e" + format(order.remainingAmount()),
+                    "§7Filled: §b" + String.format(Locale.ROOT, "%.1f%%", percent),
+                    "", "§cRight-click to cancel"
+            ));
+            stack.setItemMeta(meta);
+            inventory.setItem(PRODUCT_SLOTS.get(index), stack);
         }
-        inv.setItem(49, named(Material.ARROW, messages.text("bazaar.gui.back"), List.of()));
-        player.openInventory(inv);
+        if (orders.isEmpty()) inventory.setItem(22, named(Material.PAPER, "§7No active orders", List.of()));
+        inventory.setItem(47, named(Material.ENDER_CHEST, "§eClaim Orders", List.of(
+                "§7Coins: §6" + format(manager.claimableCoins(player.getUniqueId())),
+                "§7Item types: §e" + manager.itemClaims(player.getUniqueId()).size(),
+                "", "§eClick to claim!")));
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cClose", List.of()));
+        player.openInventory(inventory);
     }
 
     public void openClaims(Player player) {
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.CLAIMS), 54, messages.text("bazaar.gui.claims-title"));
+        Inventory inventory = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.CLAIMS), 54, "§8Bazaar Claims");
+        fill(inventory, Material.GRAY_STAINED_GLASS_PANE);
         long coins = manager.claimableCoins(player.getUniqueId());
-        inv.setItem(4, named(Material.GOLD_INGOT, messages.text("bazaar.gui.claim-coins"), List.of(messages.text("bazaar.gui.claim-coins-amount", Map.of("coins", Long.toString(coins))), messages.text("bazaar.gui.click-claim"))));
+        inventory.setItem(4, named(Material.GOLD_INGOT, "§6Claim Coins", List.of(
+                "§7Available: §6" + format(coins) + " Coins", "", "§eClick to claim!")));
         List<BazaarItemClaim> claims = manager.itemClaims(player.getUniqueId());
-        for (int i = 0; i < Math.min(45, claims.size()); i++) {
-            BazaarItemClaim claim = claims.get(i); BazaarItem item = manager.find(claim.itemId()).orElse(null); if (item == null) continue;
-            ItemStack stack = item.template(); ItemMeta meta = stack.getItemMeta();
-            meta.setLore(List.of(messages.text("bazaar.gui.claim-item-amount", Map.of("amount", Long.toString(claim.amount()))), messages.text("bazaar.gui.click-claim"))); stack.setItemMeta(meta); inv.setItem(9 + i, stack);
+        for (int index = 0; index < Math.min(PRODUCT_SLOTS.size(), claims.size()); index++) {
+            BazaarItemClaim claim = claims.get(index);
+            BazaarItem item = manager.find(claim.itemId()).orElse(null);
+            if (item == null) continue;
+            ItemStack stack = item.template();
+            ItemMeta meta = stack.getItemMeta();
+            List<String> lore = new ArrayList<>(meta.hasLore() ? Objects.requireNonNull(meta.getLore()) : List.of());
+            lore.add("");
+            lore.add("§7Available: §e" + format(claim.amount()));
+            lore.add("§eClick to claim!");
+            meta.setLore(lore);
+            stack.setItemMeta(meta);
+            inventory.setItem(PRODUCT_SLOTS.get(index), stack);
         }
-        inv.setItem(49, named(Material.ARROW, messages.text("bazaar.gui.back"), List.of()));
-        player.openInventory(inv);
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cClose", List.of()));
+        player.openInventory(inventory);
+    }
+
+    public void openHistory(Player player) {
+        Inventory inventory = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.HISTORY), 54, "§8Bazaar History");
+        fill(inventory, Material.GRAY_STAINED_GLASS_PANE);
+        List<BazaarItem> products = manager.enabledItems();
+        for (int index = 0; index < Math.min(PRODUCT_SLOTS.size(), products.size()); index++) {
+            BazaarItem product = products.get(index);
+            inventory.setItem(PRODUCT_SLOTS.get(index), productDisplay(product));
+        }
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        inventory.setItem(BazaarLayout.CLOSE, named(Material.BARRIER, "§cClose", List.of()));
+        player.openInventory(inventory);
+    }
+
+    public void openSettings(Player player) {
+        Inventory inventory = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.SETTINGS), 27, "§8Bazaar Settings");
+        fill(inventory, Material.GRAY_STAINED_GLASS_PANE);
+        inventory.setItem(11, named(Material.REDSTONE_TORCH, "§cInstasell Ignore List", List.of(
+                "§7The button locations are reserved.", "§7Persistent ignore rules will be added", "§7with the sack system.")));
+        inventory.setItem(15, named(Material.COMPARATOR, "§aAdvanced Mode", List.of(
+                "§7This Bazaar always displays best", "§7prices and live order volume.")));
+        inventory.setItem(22, named(Material.ARROW, "§aGo Back", List.of()));
+        player.openInventory(inventory);
+    }
+
+    public void openGraphs(Player player, BazaarItem item, String category, int page, String query) {
+        BazaarHolder holder = new BazaarHolder(BazaarHolder.Screen.GRAPHS, category, item.id(), page, query,
+                null, 0, 0L, 0L);
+        Inventory inventory = Bukkit.createInventory(holder, 54, "§8Graphs ➜ " + displayName(item.template()));
+        fill(inventory, Material.GRAY_STAINED_GLASS_PANE);
+        inventory.setItem(11, graph(Material.EMERALD, "§aBuy Price", manager.bestBuyPrice(item.id()).orElse(0L)));
+        inventory.setItem(13, graph(Material.CHEST, "§aBuy Orders Volume", manager.availableVolume(item.id(), BazaarOrderSide.BUY)));
+        inventory.setItem(15, graph(Material.GOLD_INGOT, "§6Sell Price", manager.bestSellPrice(item.id()).orElse(0L)));
+        inventory.setItem(31, graph(Material.HOPPER, "§6Sell Offers Volume", manager.availableVolume(item.id(), BazaarOrderSide.SELL)));
+        inventory.setItem(BazaarLayout.BACK, named(Material.ARROW, "§aGo Back", List.of()));
+        player.openInventory(inventory);
     }
 
     public void openAdmin(Player player) {
-        Inventory inv = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.ADMIN), 54, messages.text("bazaar.gui.admin-title"));
-        int slot = 0; for (BazaarItem item : manager.allItems()) { if (slot >= 45) break; inv.setItem(slot++, adminDisplay(item)); }
-        inv.setItem(49, named(Material.LIME_DYE, messages.text("bazaar.gui.register-name"), List.of(messages.text("bazaar.gui.register-lore-1"), messages.text("bazaar.gui.register-lore-2"))));
-        inv.setItem(50, named(Material.CLOCK, messages.text("bazaar.gui.reload-name"), List.of(messages.text("bazaar.gui.reload-lore"))));
-        player.openInventory(inv);
+        Inventory inventory = Bukkit.createInventory(new BazaarHolder(BazaarHolder.Screen.ADMIN), 54, "§4Bazaar Admin");
+        int slot = 0;
+        for (BazaarItem item : manager.allItems()) {
+            if (slot >= 45) break;
+            inventory.setItem(slot++, adminDisplay(item));
+        }
+        inventory.setItem(49, named(Material.LIME_DYE, "§aRegister held item", List.of("§7Registers the item in your main hand.")));
+        inventory.setItem(50, named(Material.CLOCK, "§eReload", List.of("§7Reload products from MySQL.")));
+        player.openInventory(inventory);
+    }
+
+    public boolean isAdvancedMode(Player player) {
+        Objects.requireNonNull(player, "player");
+        return advancedModeByPlayer.getOrDefault(player.getUniqueId(), false);
+    }
+
+    public void toggleViewMode(Player player) {
+        Objects.requireNonNull(player, "player");
+        advancedModeByPlayer.compute(player.getUniqueId(), (uuid, current) -> current == null || !current);
     }
 
     public List<BazaarItem> filtered(String category, String query) {
+        String selected = normalizeCategory(category);
         String q = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();
-        return manager.enabledItems().stream().filter(item -> category == null || category.equalsIgnoreCase(normalizeCategory(item.category())))
-                .filter(item -> q.isBlank() || item.id().toLowerCase(Locale.ROOT).contains(q) || displayName(item.template()).toLowerCase(Locale.ROOT).contains(q)).toList();
+        return manager.enabledItems().stream()
+                .filter(item -> q.isBlank() ? selected.equals(normalizeCategory(item.category())) : true)
+                .filter(item -> q.isBlank()
+                        || item.id().toLowerCase(Locale.ROOT).contains(q)
+                        || displayName(item.template()).toLowerCase(Locale.ROOT).contains(q))
+                .toList();
     }
 
-    private ItemStack action(Material material, String nameKey, long price, int volume) {
-        return named(material, messages.text(nameKey), List.of(messages.text("bazaar.gui.best-price", Map.of("price", price <= 0 ? "-" : Long.toString(price))), messages.text("bazaar.gui.market-volume", Map.of("amount", Integer.toString(volume))), messages.text("bazaar.gui.click-open")));
+    public long suggestedPrice(BazaarItem item, BazaarHolder.Action action, int priceSlot) {
+        boolean buy = action == BazaarHolder.Action.CREATE_BUY;
+        long top = buy ? manager.bestBuyPrice(item.id()).orElse(manager.referenceSellPrice(item))
+                : manager.bestSellPrice(item.id()).orElse(manager.referenceBuyPrice(item));
+        if (priceSlot == BazaarLayout.PRICE_TOP) return Math.max(1L, top);
+        if (priceSlot == BazaarLayout.PRICE_IMPROVE) return buy ? safeAdd(top, 1L) : Math.max(1L, top - 1L);
+        long bestBuy = manager.bestBuyPrice(item.id()).orElse(manager.referenceSellPrice(item));
+        long bestSell = manager.bestSellPrice(item.id()).orElse(manager.referenceBuyPrice(item));
+        return Math.max(1L, bestBuy + Math.max(0L, bestSell - bestBuy) / 2L);
     }
-    private ItemStack categoryIcon(String category) { Material material = switch (category) { case "FARMING" -> Material.WHEAT; case "MINING" -> Material.DIAMOND_PICKAXE; case "COMBAT" -> Material.IRON_SWORD; case "FORAGING" -> Material.OAK_LOG; default -> Material.CHEST; }; return named(material, "&a" + messages.category(category), List.of(messages.text("bazaar.gui.product-count", Map.of("count", Long.toString(filtered(category, "").size()))), messages.text("bazaar.gui.click-open"))); }
-    private ItemStack productDisplay(BazaarItem item) { ItemStack stack = item.template(); ItemMeta meta = stack.getItemMeta(); List<String> lore = new ArrayList<>(meta.hasLore() ? Objects.requireNonNull(meta.getLore()) : List.of()); if (!lore.isEmpty()) lore.add(""); lore.add(messages.text("bazaar.gui.best-buy", Map.of("price", price(manager.bestBuyPrice(item.id()))))); lore.add(messages.text("bazaar.gui.best-sell", Map.of("price", price(manager.bestSellPrice(item.id()))))); lore.add(""); lore.add(messages.text("bazaar.gui.click-view")); meta.setLore(lore); meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES); stack.setItemMeta(meta); return stack; }
-    private ItemStack adminDisplay(BazaarItem item) { ItemStack stack = productDisplay(item); ItemMeta meta = stack.getItemMeta(); List<String> lore = new ArrayList<>(Objects.requireNonNullElse(meta.getLore(), List.of())); lore.add(messages.text("bazaar.gui.item-id", Map.of("id", item.id()))); lore.add(messages.text("bazaar.gui.category", Map.of("category", messages.category(item.category())))); lore.add(messages.text("bazaar.gui.admin-buy-up")); lore.add(messages.text("bazaar.gui.admin-buy-down")); lore.add(messages.text("bazaar.gui.admin-sell-up")); lore.add(messages.text("bazaar.gui.admin-delete")); lore.add(messages.text(item.enabled() ? "bazaar.gui.enabled" : "bazaar.gui.disabled")); meta.setLore(lore); stack.setItemMeta(meta); return stack; }
-    private ItemStack quantityIcon(BazaarHolder.Action action, int amount) { return quantityIcon(action, amount, messages.text("bazaar.gui.quantity", Map.of("amount", Integer.toString(amount)))); }
-    private ItemStack quantityIcon(BazaarHolder.Action action, int amount, String name) { return named(action == BazaarHolder.Action.INSTANT_BUY ? Material.EMERALD : Material.GOLD_INGOT, name, List.of(messages.text("bazaar.gui.click-select"))); }
-    private String price(OptionalLong price) { return price.isPresent() ? Long.toString(price.getAsLong()) : "-"; }
-    private String normalizeCategory(String category) { if (category == null) return "OTHER"; return switch (category.toUpperCase(Locale.ROOT)) { case "FISHING" -> "FORAGING"; case "NETHER" -> "COMBAT"; default -> category.toUpperCase(Locale.ROOT); }; }
-    private String displayName(ItemStack stack) { ItemMeta meta = stack.getItemMeta(); return meta.hasDisplayName() ? meta.getDisplayName() : stack.getType().getKey().getKey().replace('_', ' '); }
-    private void fillBorder(Inventory inv) { ItemStack pane = named(Material.GRAY_STAINED_GLASS_PANE, " ", List.of()); for (int i = 0; i < inv.getSize(); i++) if (i < 9 || i >= inv.getSize() - 9 || i % 9 == 0 || i % 9 == 8) inv.setItem(i, pane); }
-    private void fill(Inventory inv, Material material) { ItemStack pane = named(material, " ", List.of()); for (int i = 0; i < inv.getSize(); i++) inv.setItem(i, pane); }
-    private ItemStack named(Material material, String name, List<String> lore) { ItemStack stack = new ItemStack(material); ItemMeta meta = stack.getItemMeta(); meta.setDisplayName(BazaarMessages.color(name)); meta.setLore(lore.stream().map(BazaarMessages::color).toList()); meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES); stack.setItemMeta(meta); return stack; }
+
+    private ItemStack categoryIcon(String category, boolean selected) {
+        Material material = switch (category) {
+            case "FARMING" -> Material.WHEAT;
+            case "MINING" -> Material.DIAMOND_PICKAXE;
+            case "COMBAT" -> Material.IRON_SWORD;
+            case "FORAGING" -> Material.OAK_LOG;
+            default -> Material.NETHER_STAR;
+        };
+        return named(material, (selected ? "§e" : "§a") + categoryName(category), List.of(
+                "§7Products: §e" + manager.enabledItems().stream()
+                        .filter(item -> normalizeCategory(item.category()).equals(category)).count(),
+                selected ? "§aCurrently selected" : "§eClick to view!"));
+    }
+
+    private ItemStack productDisplay(BazaarItem item) {
+        return productDisplay(item, true);
+    }
+
+    private ItemStack productDisplay(BazaarItem item, boolean advancedMode) {
+        ItemStack stack = item.template();
+        ItemMeta meta = stack.getItemMeta();
+        List<String> lore = new ArrayList<>(meta.hasLore() ? Objects.requireNonNull(meta.getLore()) : List.of());
+        if (!lore.isEmpty()) lore.add("");
+        lore.add("§7Buy price: §6" + format(manager.bestSellPrice(item.id()).orElse(item.buyPrice())) + " coins");
+        lore.add("§7Sell price: §6" + format(manager.bestBuyPrice(item.id()).orElse(item.sellPrice())) + " coins");
+        if (advancedMode) {
+            lore.add("§7Buy volume: §e" + format(manager.availableVolume(item.id(), BazaarOrderSide.BUY)));
+            lore.add("§7Sell volume: §e" + format(manager.availableVolume(item.id(), BazaarOrderSide.SELL)));
+        }
+        lore.add("");
+        lore.add("§eClick to view product!");
+        meta.setLore(lore);
+        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    private ItemStack adminDisplay(BazaarItem item) {
+        ItemStack stack = productDisplay(item);
+        ItemMeta meta = stack.getItemMeta();
+        List<String> lore = new ArrayList<>(Objects.requireNonNullElse(meta.getLore(), List.of()));
+        lore.add("§7ID: §f" + item.id());
+        lore.add("§7Category: §f" + item.category());
+        lore.add("§aLeft: reference buy +1");
+        lore.add("§cRight: reference buy -1");
+        lore.add("§bShift-left: reference sell +1");
+        lore.add("§4Shift-right: delete");
+        meta.setLore(lore);
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    private ItemStack marketAction(Material material, String name, long price, int volume) {
+        return named(material, name, List.of(
+                price > 0L ? "§7Best price: §6" + format(price) + " coins" : "§cNo matching orders",
+                "§7Available: §e" + format(volume), "", "§eClick to continue!"));
+    }
+
+    private ItemStack quantityButton(BazaarHolder.Action action, int amount, String name) {
+        return named(action == BazaarHolder.Action.INSTANT_BUY ? Material.EMERALD : Material.GOLD_INGOT,
+                name, List.of("§7Amount: §e" + format(amount), "", "§eClick to select!"));
+    }
+
+    private ItemStack orderAmountButton(int amount, String name) {
+        return named(Material.CHEST, name, List.of("§7Amount: §e" + format(amount), "", "§eClick to select!"));
+    }
+
+    private ItemStack priceButton(long price, String name) {
+        return named(Material.GOLD_NUGGET, name, List.of("§7Price per item: §6" + format(price), "", "§eClick to select!"));
+    }
+
+    private ItemStack graph(Material material, String name, long value) {
+        return named(material, name, List.of("§7Current value: §e" + format(value), "§8Historical storage is not enabled yet."));
+    }
+
+    private Material paneFor(String category) {
+        return switch (category) {
+            case "FARMING" -> Material.YELLOW_STAINED_GLASS_PANE;
+            case "MINING" -> Material.GRAY_STAINED_GLASS_PANE;
+            case "COMBAT" -> Material.RED_STAINED_GLASS_PANE;
+            case "FORAGING" -> Material.LIME_STAINED_GLASS_PANE;
+            default -> Material.PINK_STAINED_GLASS_PANE;
+        };
+    }
+
+    private void fill(Inventory inventory, Material material) {
+        ItemStack pane = named(material, " ", List.of());
+        for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, pane);
+    }
+
+    private ItemStack named(Material material, String name, List<String> lore) {
+        ItemStack stack = new ItemStack(material);
+        ItemMeta meta = stack.getItemMeta();
+        meta.setDisplayName(name);
+        meta.setLore(lore);
+        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    private String normalizeCategory(String category) {
+        if (category == null) return "FARMING";
+        return switch (category.toUpperCase(Locale.ROOT)) {
+            case "FISHING" -> "FORAGING";
+            case "NETHER" -> "COMBAT";
+            case "ODDITIES" -> "OTHER";
+            default -> category.toUpperCase(Locale.ROOT);
+        };
+    }
+
+    private String categoryName(String category) {
+        return switch (normalizeCategory(category)) {
+            case "FARMING" -> "Farming";
+            case "MINING" -> "Mining";
+            case "COMBAT" -> "Combat";
+            case "FORAGING" -> "Woods & Fishes";
+            default -> "Oddities";
+        };
+    }
+
+    private String displayName(ItemStack stack) {
+        ItemMeta meta = stack.getItemMeta();
+        return meta.hasDisplayName() ? meta.getDisplayName()
+                : titleCase(stack.getType().getKey().getKey().replace('_', ' '));
+    }
+
+    private String titleCase(String input) {
+        StringBuilder result = new StringBuilder();
+        boolean upper = true;
+        for (char character : input.toCharArray()) {
+            if (upper && Character.isLetter(character)) {
+                result.append(Character.toUpperCase(character));
+                upper = false;
+            } else {
+                result.append(character);
+                if (character == ' ') upper = true;
+            }
+        }
+        return result.toString();
+    }
+
+    private String actionVerb(BazaarHolder.Action action) {
+        return action == BazaarHolder.Action.INSTANT_BUY ? "Buy" : "Sell";
+    }
+
+    private long safeMultiply(long price, int amount) {
+        try {
+            return Math.multiplyExact(price, (long) amount);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private long safeAdd(long value, long increment) {
+        try {
+            return Math.addExact(value, increment);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private String format(long value) {
+        return String.format(Locale.US, "%,d", value);
+    }
 }
