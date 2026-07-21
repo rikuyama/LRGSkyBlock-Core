@@ -4,7 +4,7 @@ database:
 
   port: 3306
 
-  database: lrgskyblock
+  name: lrgskyblock
 
   username: root
 
@@ -20,3 +20,30 @@ player-level:
     message: true
     sound: true
     particles: true
+
+
+economy:
+  timezone: Asia/Tokyo
+  interest:
+    hour: 4
+    minute: 0
+    rate: 0.02
+  transfer:
+    daily-limit: 10000000
+    fee-rate: 0.0
+  bank-levels:
+    "1":
+      capacity: 1000000
+      upgrade-cost: 0
+    "2":
+      capacity: 5000000
+      upgrade-cost: 100000
+    "3":
+      capacity: 25000000
+      upgrade-cost: 500000
+    "4":
+      capacity: 100000000
+      upgrade-cost: 2500000
+    "5":
+      capacity: 1000000000
+      upgrade-cost: 10000000
