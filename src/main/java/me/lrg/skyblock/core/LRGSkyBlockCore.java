@@ -18,6 +18,18 @@ import me.lrg.skyblock.core.config.FortuneTargetSettings;
 import me.lrg.skyblock.core.config.PlayerDefaultSettings;
 import me.lrg.skyblock.core.database.DatabaseManager;
 import me.lrg.skyblock.core.database.StatsSchemaMigrator;
+import me.lrg.skyblock.core.database.table.DatabaseSetup;
+import me.lrg.skyblock.core.economy.command.BankCommand;
+import me.lrg.skyblock.core.economy.command.BalanceCommand;
+import me.lrg.skyblock.core.economy.command.EconomyAdminCommand;
+import me.lrg.skyblock.core.economy.command.PayCommand;
+import me.lrg.skyblock.core.economy.config.EconomySettings;
+import me.lrg.skyblock.core.economy.database.EconomySchemaMigrator;
+import me.lrg.skyblock.core.economy.gui.BankGui;
+import me.lrg.skyblock.core.economy.listener.BankListener;
+import me.lrg.skyblock.core.economy.repository.EconomyRepository;
+import me.lrg.skyblock.core.economy.service.EconomyService;
+import me.lrg.skyblock.core.economy.task.BankInterestTask;
 import me.lrg.skyblock.core.listener.FarmingFortuneListener;
 import me.lrg.skyblock.core.listener.ForagingFortuneListener;
 import me.lrg.skyblock.core.listener.HealthListener;
@@ -69,6 +81,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private WardrobeRepository wardrobeRepository;
     private BazaarRepository bazaarRepository;
     private BazaarOrderRepository bazaarOrderRepository;
+    private EconomyRepository economyRepository;
     private PlayerManager playerManager;
     private CoinManager coinManager;
     private ActionBarSettingsManager actionBarSettingsManager;
@@ -83,6 +96,10 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     private BazaarManager bazaarManager;
     private BazaarGui bazaarGui;
     private BazaarMessages bazaarMessages;
+    private EconomySettings economySettings;
+    private EconomyService economyService;
+    private BankGui bankGui;
+    private BankInterestTask bankInterestTask;
     private PlayerDefaultSettings playerDefaultSettings;
     private FortuneTargetSettings fortuneTargetSettings;
     private FortuneGui fortuneGui;
@@ -127,6 +144,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
 
     private void setupDatabase() {
         this.databaseManager = new DatabaseManager(this);
+        new DatabaseSetup(databaseManager).createTables();
     }
 
     private void migrateDatabaseSchema() {
@@ -135,11 +153,13 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         new PlayerLevelSchemaMigrator(databaseManager, getLogger()).migrate();
         new WardrobeSchemaMigrator(databaseManager, getLogger()).migrate();
         new BazaarSchemaMigrator(databaseManager, getLogger()).migrate();
+        new EconomySchemaMigrator(databaseManager, getLogger()).migrate();
     }
 
     private void setupConfigs() {
         this.playerDefaultSettings = PlayerDefaultSettings.from(this);
         this.fortuneTargetSettings = FortuneTargetSettings.load(this);
+        this.economySettings = EconomySettings.load(this);
     }
 
     private void setupRepositories() {
@@ -149,11 +169,15 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.wardrobeRepository = new WardrobeRepository(databaseManager, getLogger());
         this.bazaarRepository = new BazaarRepository(databaseManager, getLogger());
         this.bazaarOrderRepository = new BazaarOrderRepository(databaseManager, getLogger());
+        this.economyRepository = new EconomyRepository(databaseManager, getLogger());
     }
 
     private void setupManagers() {
         this.playerManager = new PlayerManager(this, playerRepository, playerDefaultSettings);
         this.coinManager = new CoinManager(playerManager);
+        this.economyService = new EconomyService(economyRepository, coinManager, economySettings);
+        this.bankGui = new BankGui(economyService);
+        this.bankInterestTask = new BankInterestTask(this, economyService);
         this.actionBarSettingsManager = new ActionBarSettingsManager(this);
         this.statsManager = new StatsManager(this, statsRepository, actionBarSettingsManager);
         this.placedBlockTracker = new me.lrg.skyblock.core.manager.PlacedBlockTracker(this);
@@ -163,7 +187,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         this.autoPickupManager = new AutoPickupManager(playerLevelUnlockManager, new InventoryDelivery());
         this.wardrobeManager = new WardrobeManager(this, wardrobeRepository);
         this.wardrobeGui = new WardrobeGui(wardrobeManager);
-        this.bazaarManager = new BazaarManager(bazaarRepository, bazaarOrderRepository, coinManager);
+        this.bazaarManager = new BazaarManager(bazaarRepository, bazaarOrderRepository, economyService);
         this.bazaarMessages = BazaarMessages.load(this);
         this.bazaarGui = new BazaarGui(bazaarManager, bazaarMessages);
         this.fortuneGui = new FortuneGui(fortuneTargetSettings);
@@ -193,6 +217,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new WardrobePlayerListener(wardrobeManager), this);
         getServer().getPluginManager().registerEvents(new WardrobeListener(wardrobeManager, wardrobeGui), this);
         getServer().getPluginManager().registerEvents(new BazaarListener(this, bazaarManager, bazaarGui, bazaarMessages), this);
+        getServer().getPluginManager().registerEvents(new BankListener(economyService, bankGui), this);
         getServer().getPluginManager().registerEvents(new RankNameTagListener(rankNameTagManager), this);
     }
 
@@ -202,7 +227,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
         if (coinsCommand == null) {
             getLogger().warning("plugin.yml に coins コマンドが登録されていません。");
         } else {
-            CoinCommand coinCommand = new CoinCommand(coinManager);
+            CoinCommand coinCommand = new CoinCommand(economyService);
             coinsCommand.setExecutor(coinCommand);
             coinsCommand.setTabCompleter(coinCommand);
         }
@@ -271,6 +296,22 @@ public final class LRGSkyBlockCore extends JavaPlugin {
             bazaarCommand.setExecutor(new BazaarCommand(bazaarGui, playerLevelUnlockManager, bazaarMessages));
         }
 
+        PluginCommand bankCommand = getCommand("bank");
+        if (bankCommand != null) bankCommand.setExecutor(new BankCommand(economyService, bankGui));
+
+        PluginCommand balanceCommand = getCommand("balance");
+        if (balanceCommand != null) balanceCommand.setExecutor(new BalanceCommand(economyService));
+
+        PluginCommand payCommand = getCommand("pay");
+        if (payCommand != null) {
+            PayCommand executor = new PayCommand(economyService);
+            payCommand.setExecutor(executor);
+            payCommand.setTabCompleter(executor);
+        }
+
+        PluginCommand economyAdminCommand = getCommand("economyadmin");
+        if (economyAdminCommand != null) economyAdminCommand.setExecutor(new EconomyAdminCommand(economyService));
+
         PluginCommand rankCommand = getCommand("rank");
         if (rankCommand == null) {
             getLogger().warning("plugin.yml に rank コマンドが登録されていません。");
@@ -292,6 +333,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     }
 
     private void startTasks() {
+        if (bankInterestTask != null) bankInterestTask.start();
         if (statsManager != null) {
             statsManager.startActionBarTask();
             statsManager.startManaRegenTask();
@@ -308,6 +350,7 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     }
 
     private void stopTasks() {
+        if (bankInterestTask != null) bankInterestTask.stop();
         if (rankRefreshTask != null) {
             rankRefreshTask.cancel();
             rankRefreshTask = null;
@@ -384,4 +427,6 @@ public final class LRGSkyBlockCore extends JavaPlugin {
     public PlayerLevelUnlockManager getPlayerLevelUnlockManager() { return playerLevelUnlockManager; }
     public WardrobeManager getWardrobeManager() { return wardrobeManager; }
     public FortuneTargetSettings getFortuneTargetSettings() { return fortuneTargetSettings; }
+    public EconomyService getEconomyService() { return economyService; }
+    public EconomyRepository getEconomyRepository() { return economyRepository; }
 }
