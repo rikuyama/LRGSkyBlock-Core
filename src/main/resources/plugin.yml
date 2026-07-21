@@ -1,5 +1,5 @@
 name: LRGSkyBlock-Core
-version: 0.7.4
+version: 0.7.5
 main: me.lrg.skyblock.core.LRGSkyBlockCore
 api-version: "26.2"
 author: LRG
@@ -37,6 +37,24 @@ commands:
     description: Bazaarを開く・管理するコマンド
     usage: /bazaar [admin]
     aliases: [bz]
+    permission: lrgskyblock.command.bazaar
+  bank:
+    description: 銀行GUIと入出金を操作するコマンド
+    usage: /bank [deposit|withdraw|history] [amount|all]
+    permission: lrgskyblock.command.bank
+  balance:
+    description: Walletと銀行残高を確認するコマンド
+    usage: /balance
+    aliases: [bal, money]
+    permission: lrgskyblock.command.balance
+  pay:
+    description: プレイヤーへCoinsを送金するコマンド
+    usage: /pay <player> <amount>
+    permission: lrgskyblock.command.pay
+  economyadmin:
+    description: Economy管理コマンド
+    usage: /economyadmin <give|take> <player> <amount>
+    permission: lrgskyblock.command.economyadmin
   rank:
     description: ランク表示を確認・デバッグするコマンド
     usage: /rank [player] | /rank <set|reset> <player> [rank]
@@ -67,6 +85,14 @@ permissions:
   lrgskyblock.command.bazaar:
     default: true
   lrgskyblock.command.bazaar.admin:
+    default: op
+  lrgskyblock.command.bank:
+    default: true
+  lrgskyblock.command.balance:
+    default: true
+  lrgskyblock.command.pay:
+    default: true
+  lrgskyblock.command.economyadmin:
     default: op
   lrgskyblock.command.rank:
     default: true
