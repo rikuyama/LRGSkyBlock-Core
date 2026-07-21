@@ -1,307 +1,111 @@
 package me.lrg.skyblock.core.command;
 
-import me.lrg.skyblock.core.manager.CoinManager;
+import me.lrg.skyblock.core.economy.model.EconomyResult;
+import me.lrg.skyblock.core.economy.service.EconomyOperationIds;
+import me.lrg.skyblock.core.economy.service.EconomyService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
 import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
 
-/**
- * Coins確認・操作用コマンド。
- *
- * 使用例:
- * /coins
- * /coins help
- * /coins add <player> <amount>
- * /coins remove <player> <amount>
- * /coins set <player> <amount>
- *
- * 注意:
- * - SQLは書かない
- * - Coins操作はCoinManagerへ任せる
- * - 現段階ではオンラインプレイヤーのみ対象
- */
-public class CoinCommand implements CommandExecutor, TabCompleter {
-
+public final class CoinCommand implements CommandExecutor, TabCompleter {
     private static final String PERMISSION_USE = "lrgskyblock.command.coins";
     private static final String PERMISSION_ADMIN = "lrgskyblock.command.coins.admin";
+    private final EconomyService economyService;
 
-    private final CoinManager coinManager;
-
-    public CoinCommand(CoinManager coinManager) {
-        this.coinManager = Objects.requireNonNull(coinManager, "coinManager");
+    public CoinCommand(EconomyService economyService) {
+        this.economyService = Objects.requireNonNull(economyService, "economyService");
     }
 
     @Override
-    public boolean onCommand(
-            CommandSender sender,
-            Command command,
-            String label,
-            String[] args
-    ) {
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission(PERMISSION_USE)) {
             sender.sendMessage("§cこのコマンドを使う権限がありません。");
             return true;
         }
-
         if (args.length == 0) {
-            showOwnCoins(sender);
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cコンソールから使う場合は /coins help を確認してください。");
+                return true;
+            }
+            sender.sendMessage("§e現在のCoins: §6" + economyService.getWalletBalance(player.getUniqueId()));
             return true;
         }
-
-        switch (args[0].toLowerCase()) {
-            case "help" -> sendUsage(sender);
-            case "add" -> addCoins(sender, args);
-            case "remove" -> removeCoins(sender, args);
-            case "set" -> setCoins(sender, args);
-            default -> sendUsage(sender);
+        if (args[0].equalsIgnoreCase("help")) {
+            sendUsage(sender);
+            return true;
         }
-
+        if (!sender.hasPermission(PERMISSION_ADMIN)) {
+            sender.sendMessage("§cCoinsを操作する権限がありません。");
+            return true;
+        }
+        if (args.length != 3) {
+            sendUsage(sender);
+            return true;
+        }
+        Player target = Bukkit.getPlayerExact(args[1]);
+        if (target == null) {
+            sender.sendMessage("§c指定したプレイヤーがオンラインではありません。");
+            return true;
+        }
+        long amount;
+        try {
+            amount = Long.parseLong(args[2].replace(",", ""));
+        } catch (NumberFormatException exception) {
+            sender.sendMessage("§c金額は数字で入力してください。");
+            return true;
+        }
+        EconomyResult result = switch (args[0].toLowerCase()) {
+            case "add" -> economyService.depositWallet(target.getUniqueId(), amount, "coins_admin_add",
+                    EconomyOperationIds.create("coins-add", target.getUniqueId()));
+            case "remove" -> economyService.withdrawWallet(target.getUniqueId(), amount, "coins_admin_remove",
+                    EconomyOperationIds.create("coins-remove", target.getUniqueId()));
+            case "set" -> economyService.setWallet(target.getUniqueId(), amount, "coins_admin_set",
+                    EconomyOperationIds.create("coins-set", target.getUniqueId()));
+            default -> null;
+        };
+        if (result == null) {
+            sendUsage(sender);
+            return true;
+        }
+        sender.sendMessage(result.success()
+                ? "§a" + target.getName() + " のCoinsを更新しました。現在: §6" + result.walletBalance()
+                : "§cCoins操作に失敗しました: " + result.failure().name());
         return true;
     }
 
-    private void showOwnCoins(CommandSender sender) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("§cコンソールから使う場合は /coins help を確認してください。");
-            return;
-        }
-
-        Optional<Long> coinsOptional = coinManager.getCoins(player.getUniqueId());
-
-        if (coinsOptional.isEmpty()) {
-            player.sendMessage("§cプレイヤーデータがまだ読み込まれていません。");
-            return;
-        }
-
-        player.sendMessage("§e現在のCoins: §6" + coinsOptional.get());
-    }
-
-    private void addCoins(CommandSender sender, String[] args) {
-        if (!hasAdminPermission(sender)) {
-            return;
-        }
-
-        CommandInput input = parseAdminInput(sender, args);
-
-        if (input == null) {
-            return;
-        }
-
-        boolean success = coinManager.addCoins(input.target().getUniqueId(), input.amount());
-
-        if (!success) {
-            sender.sendMessage("§cCoinsの追加に失敗しました。");
-            return;
-        }
-
-        sender.sendMessage("§a" + input.target().getName() + " に " + input.amount() + " Coinsを追加しました。");
-        sendTargetCoins(sender, input.target());
-    }
-
-    private void removeCoins(CommandSender sender, String[] args) {
-        if (!hasAdminPermission(sender)) {
-            return;
-        }
-
-        CommandInput input = parseAdminInput(sender, args);
-
-        if (input == null) {
-            return;
-        }
-
-        boolean success = coinManager.removeCoins(input.target().getUniqueId(), input.amount());
-
-        if (!success) {
-            sender.sendMessage("§cCoinsの削除に失敗しました。所持Coinsが足りない可能性があります。");
-            return;
-        }
-
-        sender.sendMessage("§a" + input.target().getName() + " から " + input.amount() + " Coinsを削除しました。");
-        sendTargetCoins(sender, input.target());
-    }
-
-    private void setCoins(CommandSender sender, String[] args) {
-        if (!hasAdminPermission(sender)) {
-            return;
-        }
-
-        CommandInput input = parseAdminInput(sender, args);
-
-        if (input == null) {
-            return;
-        }
-
-        boolean success = coinManager.setCoins(input.target().getUniqueId(), input.amount());
-
-        if (!success) {
-            sender.sendMessage("§cCoinsの設定に失敗しました。");
-            return;
-        }
-
-        sender.sendMessage("§a" + input.target().getName() + " のCoinsを " + input.amount() + " に設定しました。");
-        sendTargetCoins(sender, input.target());
-    }
-
-    private boolean hasAdminPermission(CommandSender sender) {
-        if (sender.hasPermission(PERMISSION_ADMIN)) {
-            return true;
-        }
-
-        sender.sendMessage("§cCoinsを操作する権限がありません。");
-        return false;
-    }
-
-    private CommandInput parseAdminInput(CommandSender sender, String[] args) {
-        if (args.length < 3) {
-            sender.sendMessage("§cプレイヤー名と金額を入力してください。");
-            sendUsage(sender);
-            return null;
-        }
-
-        Player target = Bukkit.getPlayerExact(args[1]);
-
-        if (target == null || !target.isOnline()) {
-            sender.sendMessage("§c指定したプレイヤーがオンラインではありません。");
-            return null;
-        }
-
-        Long amount = parseAmount(sender, args[2]);
-
-        if (amount == null) {
-            return null;
-        }
-
-        return new CommandInput(target, amount);
-    }
-
-    private Long parseAmount(CommandSender sender, String text) {
-        try {
-            long amount = Long.parseLong(text);
-
-            if (amount < 0L) {
-                sender.sendMessage("§c金額にマイナスは使えません。");
-                return null;
-            }
-
-            return amount;
-        } catch (NumberFormatException exception) {
-            sender.sendMessage("§c金額は数字で入力してください。");
-            return null;
-        }
-    }
-
-    private void sendTargetCoins(CommandSender sender, Player target) {
-        UUID uuid = target.getUniqueId();
-
-        Optional<Long> coinsOptional = coinManager.getCoins(uuid);
-
-        if (coinsOptional.isEmpty()) {
-            sender.sendMessage("§c対象プレイヤーのデータがまだ読み込まれていません。");
-            return;
-        }
-
-        sender.sendMessage("§e" + target.getName() + " の現在のCoins: §6" + coinsOptional.get());
-    }
-
     private void sendUsage(CommandSender sender) {
-        sender.sendMessage("§eCoinsコマンド:");
-        sender.sendMessage("§7/coins §f- 自分のCoinsを確認");
-        sender.sendMessage("§7/coins help §f- ヘルプを表示");
-        sender.sendMessage("§7/coins add <プレイヤー名> <金額> §f- Coinsを追加");
-        sender.sendMessage("§7/coins remove <プレイヤー名> <金額> §f- Coinsを削除");
-        sender.sendMessage("§7/coins set <プレイヤー名> <金額> §f- Coinsを設定");
+        sender.sendMessage("§e/coins §7- 自分のCoinsを確認");
+        sender.sendMessage("§e/coins <add|remove|set> <player> <amount>");
     }
 
-    private record CommandInput(Player target, long amount) {
-    }
     @Override
-    public List<String> onTabComplete(
-            CommandSender sender,
-            Command command,
-            String alias,
-            String[] args
-    ) {
-        if (!sender.hasPermission(PERMISSION_USE)) {
-            return Collections.emptyList();
-        }
-
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!sender.hasPermission(PERMISSION_USE)) return Collections.emptyList();
         if (args.length == 1) {
-            List<String> completions = new ArrayList<>();
-
-            completions.add("help");
-
-            if (sender.hasPermission(PERMISSION_ADMIN)) {
-                completions.add("add");
-                completions.add("remove");
-                completions.add("set");
-            }
-
-            return filterStartsWith(completions, args[0]);
+            List<String> values = new ArrayList<>();
+            values.add("help");
+            if (sender.hasPermission(PERMISSION_ADMIN)) values.addAll(List.of("add", "remove", "set"));
+            return filter(values, args[0]);
         }
-
-        if (args.length == 2) {
-            if (!sender.hasPermission(PERMISSION_ADMIN)) {
-                return Collections.emptyList();
-            }
-
-            if (!isAdminSubCommand(args[0])) {
-                return Collections.emptyList();
-            }
-
-            List<String> playerNames = Bukkit.getOnlinePlayers()
-                    .stream()
-                    .map(Player::getName)
-                    .toList();
-
-            return filterStartsWith(playerNames, args[1]);
+        if (args.length == 2 && sender.hasPermission(PERMISSION_ADMIN)) {
+            return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[1]);
         }
-
-        if (args.length == 3) {
-            if (!sender.hasPermission(PERMISSION_ADMIN)) {
-                return Collections.emptyList();
-            }
-
-            if (!isAdminSubCommand(args[0])) {
-                return Collections.emptyList();
-            }
-
-            List<String> amounts = List.of(
-                    "1",
-                    "10",
-                    "100",
-                    "1000",
-                    "10000",
-                    "100000"
-            );
-
-            return filterStartsWith(amounts, args[2]);
+        if (args.length == 3 && sender.hasPermission(PERMISSION_ADMIN)) {
+            return filter(List.of("1", "10", "100", "1000", "10000"), args[2]);
         }
-
         return Collections.emptyList();
     }
 
-    private boolean isAdminSubCommand(String text) {
-        String lowerText = text.toLowerCase();
-
-        return lowerText.equals("add")
-                || lowerText.equals("remove")
-                || lowerText.equals("set");
-    }
-
-    private List<String> filterStartsWith(List<String> values, String input) {
-        String lowerInput = input.toLowerCase();
-
-        return values.stream()
-                .filter(value -> value.toLowerCase().startsWith(lowerInput))
-                .toList();
+    private List<String> filter(List<String> values, String prefix) {
+        String lower = prefix.toLowerCase();
+        return values.stream().filter(value -> value.toLowerCase().startsWith(lower)).toList();
     }
 }
