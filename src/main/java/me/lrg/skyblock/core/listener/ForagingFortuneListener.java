@@ -4,6 +4,7 @@ import me.lrg.skyblock.core.autopickup.AutoPickupManager;
 import me.lrg.skyblock.core.manager.FortuneManager;
 import me.lrg.skyblock.core.manager.PlacedBlockTracker;
 import me.lrg.skyblock.core.util.FortuneToolUtil;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -33,6 +34,10 @@ public class ForagingFortuneListener implements Listener {
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
         Block block = event.getBlock();
+
+        if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) {
+            return;
+        }
         Material blockType = block.getType();
 
         if (placedBlockTracker.isPlayerPlaced(block)) {

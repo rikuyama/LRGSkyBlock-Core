@@ -1,5 +1,6 @@
 package me.lrg.skyblock.core.autopickup;
 
+import org.bukkit.GameMode;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -28,6 +29,9 @@ public final class AutoPickupListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
+        if (!isDropEligible(player)) {
+            return;
+        }
         if (!autoPickupManager.isUnlocked(player)) {
             return;
         }
@@ -55,7 +59,7 @@ public final class AutoPickupListener implements Listener {
         }
 
         Player killer = event.getEntity().getKiller();
-        if (killer == null || !autoPickupManager.isUnlocked(killer)) {
+        if (killer == null || !isDropEligible(killer) || !autoPickupManager.isUnlocked(killer)) {
             return;
         }
 
@@ -75,6 +79,9 @@ public final class AutoPickupListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
+        if (!isDropEligible(player)) {
+            return;
+        }
         if (!autoPickupManager.isUnlocked(player)) {
             return;
         }
@@ -90,5 +97,10 @@ public final class AutoPickupListener implements Listener {
         if (autoPickupManager.collectExperience(player, experience)) {
             event.setExpToDrop(0);
         }
+    }
+
+    private boolean isDropEligible(Player player) {
+        GameMode gameMode = player.getGameMode();
+        return gameMode != GameMode.CREATIVE && gameMode != GameMode.SPECTATOR;
     }
 }

@@ -4,6 +4,7 @@ import me.lrg.skyblock.core.autopickup.AutoPickupManager;
 import me.lrg.skyblock.core.manager.FortuneManager;
 import me.lrg.skyblock.core.manager.PlacedBlockTracker;
 import me.lrg.skyblock.core.util.FortuneToolUtil;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -34,6 +35,9 @@ public class FarmingFortuneListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
+        if (!isDropEligible(player)) {
+            return;
+        }
         Block block = event.getBlock();
         Material blockType = block.getType();
 
@@ -95,7 +99,7 @@ public class FarmingFortuneListener implements Listener {
             return;
         }
 
-        int brokenAmount = countVerticalCropBlocks(block, blockType);
+        int brokenAmount = removeAndCountVerticalCropBlocks(block, blockType);
         if (brokenAmount <= 0) {
             return;
         }
@@ -120,16 +124,23 @@ public class FarmingFortuneListener implements Listener {
         deliverOrDrop(player, dropLocation, java.util.List.of(dropItem), block.getWorld());
     }
 
-    private int countVerticalCropBlocks(Block startBlock, Material material) {
-        int count = 0;
-        Block currentBlock = startBlock;
+    private int removeAndCountVerticalCropBlocks(Block startBlock, Material material) {
+        int count = 1;
+        Block currentBlock = startBlock.getRelative(0, 1, 0);
 
         while (currentBlock.getType() == material) {
             count++;
-            currentBlock = currentBlock.getRelative(0, 1, 0);
+            Block nextBlock = currentBlock.getRelative(0, 1, 0);
+            currentBlock.setType(Material.AIR, false);
+            currentBlock = nextBlock;
         }
 
         return count;
+    }
+
+    private boolean isDropEligible(Player player) {
+        GameMode gameMode = player.getGameMode();
+        return gameMode != GameMode.CREATIVE && gameMode != GameMode.SPECTATOR;
     }
 
     private boolean isFarmingFortuneTarget(Material material) {

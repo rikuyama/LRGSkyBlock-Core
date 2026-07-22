@@ -20,7 +20,12 @@ import java.util.logging.Logger;
  * - player_data にプレイヤーが存在するか確認する
  * - player_data からプレイヤーデータを読み込む
  * - player_data に新規プレイヤーデータを作成する
- * - player_data にプレイヤーデータを保存する
+ * - プレイヤー名など、PlayerManagerが所有するプロフィール情報を保存する
+ *
+ * Coinsについて:
+ * - 新規プレイヤー作成時の初期値だけ、このRepositoryから登録する
+ * - 既存プレイヤーのCoins更新はEconomyRepository / EconomyServiceだけが行う
+ * - 退出時やサーバー停止時に古いメモリ値でCoinsを上書きしない
  *
  * 注意:
  * - SQLはこのクラスだけに書く
@@ -48,9 +53,13 @@ public class PlayerRepository {
             VALUES (?, ?, ?)
             """;
 
+    /**
+     * Coinsを更新対象に含めないことが重要。
+     * CoinsはEconomyRepositoryを唯一の書き込み元とする。
+     */
     private static final String SAVE_PLAYER_SQL = """
             UPDATE player_data
-            SET name = ?, coins = ?
+            SET name = ?
             WHERE uuid = ?
             """;
 
@@ -150,7 +159,10 @@ public class PlayerRepository {
     }
 
     /**
-     * プレイヤーデータをDBに保存する。
+     * PlayerManagerが所有するプロフィール情報をDBへ保存する。
+     *
+     * CoinsはEconomyRepository / EconomyServiceが管理するため、
+     * この処理では絶対に更新しない。
      *
      * @param playerData 保存するプレイヤーデータ
      */
@@ -162,8 +174,7 @@ public class PlayerRepository {
                 PreparedStatement statement = connection.prepareStatement(SAVE_PLAYER_SQL)
         ) {
             statement.setString(1, playerData.getName());
-            statement.setLong(2, playerData.getCoins());
-            statement.setString(3, playerData.getUuid().toString());
+            statement.setString(2, playerData.getUuid().toString());
 
             statement.executeUpdate();
         } catch (SQLException exception) {

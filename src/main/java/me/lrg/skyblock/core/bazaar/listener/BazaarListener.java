@@ -9,13 +9,16 @@ import me.lrg.skyblock.core.bazaar.model.BazaarItem;
 import me.lrg.skyblock.core.bazaar.order.model.BazaarItemClaim;
 import me.lrg.skyblock.core.bazaar.order.model.BazaarOrder;
 import me.lrg.skyblock.core.bazaar.order.model.BazaarOrderSide;
+import me.lrg.skyblock.core.bazaar.service.BazaarInteractionGuard;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -44,6 +47,7 @@ public final class BazaarListener implements Listener {
     private final BazaarGui gui;
     private final BazaarMessages messages;
     private final Map<UUID, PendingInput> pendingInputs = new ConcurrentHashMap<>();
+    private final BazaarInteractionGuard interactionGuard = new BazaarInteractionGuard(750L);
 
     public BazaarListener(JavaPlugin plugin, BazaarManager manager, BazaarGui gui, BazaarMessages messages) {
         this.plugin = plugin;
@@ -57,6 +61,11 @@ public final class BazaarListener implements Listener {
         if (!(event.getInventory().getHolder() instanceof BazaarHolder holder)) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (holder.screen() != BazaarHolder.Screen.ADMIN && event.isShiftClick()) return;
+        switch (event.getClick()) {
+            case NUMBER_KEY, DOUBLE_CLICK, SWAP_OFFHAND, DROP, CONTROL_DROP, CREATIVE, UNKNOWN -> { return; }
+            default -> { }
+        }
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= event.getInventory().getSize()) return;
 
@@ -88,6 +97,7 @@ public final class BazaarListener implements Listener {
             return;
         }
         if (slot == BazaarLayout.SELL_INVENTORY) {
+            if (!acquireMutation(player)) return;
             BazaarManager.TradeResult result = manager.sellInventoryNow(player);
             player.sendMessage(result.success()
                     ? "§aインベントリから §e" + result.amount() + "個 §aを §6" + result.totalCoins() + " Coins §aで売却しました。"
@@ -288,6 +298,7 @@ public final class BazaarListener implements Listener {
             return;
         }
         if (slot != 29) return;
+        if (!acquireMutation(player)) return;
 
         boolean success;
         if (holder.action() == BazaarHolder.Action.INSTANT_BUY) {
@@ -334,6 +345,7 @@ public final class BazaarListener implements Listener {
             player.sendMessage("§e右クリックで注文をキャンセルできます。注文ID: " + order.id());
             return;
         }
+        if (!acquireMutation(player)) return;
         boolean cancelled = manager.cancelOrder(player, order.id());
         player.sendMessage(cancelled ? "§a注文をキャンセルしました。返却物は受取所へ移動しました。"
                 : "§c注文をキャンセルできませんでした。");
@@ -350,6 +362,7 @@ public final class BazaarListener implements Listener {
             return;
         }
         if (slot == 4) {
+            if (!acquireMutation(player)) return;
             long amount = manager.claimCoins(player);
             player.sendMessage(amount > 0L ? "§a" + amount + " Coinsを受け取りました。" : "§7受け取れるコインはありません。");
             gui.openClaims(player);
@@ -360,6 +373,7 @@ public final class BazaarListener implements Listener {
         List<BazaarItemClaim> claims = manager.itemClaims(player.getUniqueId());
         if (index >= claims.size()) return;
         BazaarItemClaim claim = claims.get(index);
+        if (!acquireMutation(player)) return;
         int amount = manager.claimItems(player, claim.itemId());
         player.sendMessage(amount > 0 ? "§a" + claim.itemId() + "を" + amount + "個受け取りました。"
                 : "§cインベントリに空きがありません。");
@@ -471,6 +485,28 @@ public final class BazaarListener implements Listener {
             player.sendMessage("§c正の整数を入力してください。");
             gui.openDetail(player, item, pending.category(), pending.page(), pending.query());
         }
+    }
+
+    @EventHandler
+    public void onDrag(InventoryDragEvent event) {
+        if (!(event.getView().getTopInventory().getHolder() instanceof BazaarHolder)) return;
+        int topSize = event.getView().getTopInventory().getSize();
+        if (event.getRawSlots().stream().anyMatch(slot -> slot < topSize)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        pendingInputs.remove(uuid);
+        interactionGuard.clear(uuid);
+    }
+
+    private boolean acquireMutation(Player player) {
+        if (interactionGuard.tryAcquire(player.getUniqueId(), System.currentTimeMillis())) return true;
+        player.sendMessage("§c処理中です。少し待ってからもう一度操作してください。");
+        return false;
     }
 
     private boolean isCancel(String input) {
